@@ -11,10 +11,6 @@ pip install .
 ```
 
 #### Some examples
-Just run 10000 simulations using the defaults: 
-```
-simcosinor
-```
 
 Just run 10000 simulations using the defaults: 
 ```

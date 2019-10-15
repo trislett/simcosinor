@@ -2,7 +2,6 @@
 
 import os
 import numpy as np
-import nibabel as nib
 from simcosinor.cynumstats import cy_lin_lstsqr_mat_residual, cy_lin_lstsqr_mat, se_of_slope
 from scipy.stats import t, f, norm
 

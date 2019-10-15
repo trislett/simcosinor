@@ -64,6 +64,7 @@ def run(opts):
 	simAcro24 = np.array(simAcro24)
 	log10p = -np.log(simPvalues)
 
+	print("[Metric] [Mean] [Standard Deviation]
 	print("R2\t=\t%1.4f [%1.4f]\nAcro24\t=\t%1.4f [%1.4f]\n-logP\t=\t%1.4f [%1.4f]" % (simR2.mean(), simR2.std(), simAcro24.mean(), simAcro24.std(), log10p.mean(), log10p.std()))
 
 

@@ -1,5 +1,5 @@
 # simcosinor
-Simulation models for cosinor model
+Simulations for the cosinor model.
 
 #### Lazy install
 ```

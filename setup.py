@@ -5,7 +5,7 @@ from distutils.command.sdist import sdist
 from setuptools import setup, find_packages
 
 PACKAGE_NAME = "simcosinor"
-BUILD_REQUIRES = ["numpy", "scipy", "nibabel", "argparse", "matplotlib", "pandas", "cython", "joblib"]
+BUILD_REQUIRES = ["numpy", "scipy", "argparse", "matplotlib", "pandas", "cython"]
 
 CLASSIFIERS = ["Development Status :: 3 - Alpha",
   "Environment :: Console",

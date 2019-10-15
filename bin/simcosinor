@@ -57,6 +57,7 @@ def run(opts):
 	period = [24.0]
 	resids = residual_cosinor(endog = data, time_var = time_h, period = period)
 
+	print("Running 10000 simulations...")
 	simR2, simF, simAmpl, simAcro24, simPvalues = zip(*[run_cosinor_simulation(endog = data, time_variable = time_h, period = period, resids = resids, randomise_time = opts.randomisetimepoints, resample_eveningly = opts.evenresampling, n_sampling = int(opts.nsamples[0]), range_sampling = opts.samplerange) for i in range(10000)])
 
 	simR2 = np.array(simR2)

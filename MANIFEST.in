@@ -1,0 +1,8 @@
+include LICENSE
+include README.md
+include MANIFEST.in
+include setup.py
+include *.gz
+recursive-include ants_tbss *
+recursive-include ants_tbss/ants_oasis_template_ras *
+recursive-include bin *

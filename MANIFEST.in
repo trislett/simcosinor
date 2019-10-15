@@ -2,7 +2,7 @@ include LICENSE
 include README.md
 include MANIFEST.in
 include setup.py
-include *.gz
-recursive-include ants_tbss *
-recursive-include ants_tbss/ants_oasis_template_ras *
+include *.csv
+recursive-include simcosinor *
+recursive-include simcosinor/examples *
 recursive-include bin *

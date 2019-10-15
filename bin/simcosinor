@@ -2,3 +2,71 @@
 
 import os
 import numpy as np
+import pandas as pd
+import argparse
+
+from simcosinor.functions import check_columns, residual_cosinor, run_cosinor_simulation, example_file
+
+DESCRIPTION = "Various simulation of cosinor models."
+
+def getArgumentParser(parser = argparse.ArgumentParser(description = DESCRIPTION)):
+	parser.add_argument("-i", "--csv",
+		nargs = 1,
+		default = [example_file()],
+		type = str,
+		help="Input CSV file. Default: %(default)s)")
+	parser.add_argument("-rand", "--randomisetimepoints",
+		action = 'store_true',
+		help="Randomise the sampling time for the prediction model instead of using the actual times.")
+	parser.add_argument("-ns", "--nsamples",
+		nargs = 1,
+		default = [72],
+		type = int,
+		required = False,
+		help="The number of samples to simulate. Default: %(default)s)")
+	parser.add_argument("-sr", "--samplerange",
+		nargs = 2,
+		default = [0., 23.99],
+		type = float,
+		required = False,
+		help="The lower and upper range for data collection in hours. -r {low} {high}. Default: %(default)s)")
+	parser.add_argument("-er", "--evenresampling",
+		action = 'store_true',
+		help="The time point will be equally distributed over accross the range instead of selected randomly.")
+	parser.add_argument("-roi",
+		nargs = 1,
+		default = ['lh.L_6r'],
+		help="The ROI to build the cosinor model (the residuals from the cosinor model will be used to determine the noise). Default: %(default)s)")
+	parser.add_argument("-on", "--outputcolumnnames", 
+		help="Outputs the input CSV column names. Useful for getting the name of different regions of interest.", 
+		action='store_true')
+	return parser
+
+def run(opts):
+
+	CSV = opts.csv[0]
+	pdCSV = pd.read_csv(CSV, delimiter=',', index_col=None)
+	if opts.outputcolumnnames:
+		check_columns(pdCSV)
+		quit()
+
+	roi = opts.roi[0]
+	scan_time = 'scan_time'
+	data = np.array(pdCSV[roi])
+	time_h = np.array(pdCSV[scan_time])
+	period = [24.0]
+	resids = residual_cosinor(endog = data, time_var = time_h, period = period)
+
+	simR2, simF, simAmpl, simAcro24, simPvalues = zip(*[run_cosinor_simulation(endog = data, time_variable = time_h, period = period, resids = resids, randomise_time = opts.randomisetimepoints, resample_eveningly = opts.evenresampling, n_sampling = int(opts.nsamples[0]), range_sampling = opts.samplerange) for i in range(10000)])
+
+	simR2 = np.array(simR2)
+	simAcro24 = np.array(simAcro24)
+	log10p = -np.log(simPvalues)
+
+	print("R2\t=\t%1.4f [%1.4f]\nAcro24\t=\t%1.4f [%1.4f]\n-logP\t=\t%1.4f [%1.4f]" % (simR2.mean(), simR2.std(), simAcro24.mean(), simAcro24.std(), log10p.mean(), log10p.std()))
+
+
+if __name__ == "__main__":
+	parser = getArgumentParser()
+	opts = parser.parse_args()
+	run(opts)

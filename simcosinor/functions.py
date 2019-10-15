@@ -3,8 +3,66 @@
 import os
 import numpy as np
 import nibabel as nib
-from simCOSINOR.cynumstats import cy_lin_lstsqr_mat_residual,se_of_slope
+from simcosinor.cynumstats import cy_lin_lstsqr_mat_residual, cy_lin_lstsqr_mat, se_of_slope
 from scipy.stats import t, f, norm
+
+def example_file():
+	return("%s/simcosinor/examples/examples_subjects_norm.csv" % os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+
+def run_cosinor_simulation(endog, time_variable, period = [24.0], resids = None, randomise_time = False, resample_eveningly = False, n_sampling = None, range_sampling = None, i = 0):
+	n = len(endog)
+	k = len(period)*2 + 1
+	DF_Between = k - 1 # aka df model
+	DF_Within = n - k # aka df residuals
+
+	# Check that endog has two dimensions
+	if endog.ndim == 1:
+		endog = endog.reshape(len(endog),1)
+
+	# calculate residuals from cosinor model if not already provided
+	if resids is None:
+		resids = residual_cosinor(endog = endog, time_var = time_variable, period = period)
+
+	# Calculate true Mesor, Amplitude, Acrophase
+	MESOR, AMPLITUDE, ACROPHASE = glm_cosinor(endog = endog, 
+															time_var = time_variable,
+															period = [24.0],
+															calc_MESOR = True,
+															output_fit_only = True)
+
+	if randomise_time:
+		if n_sampling is None:
+			n_sampling = n
+		if range_sampling is None:
+			range_sampling = [0,23.99]
+		if resample_eveningly:
+			time_variable = np.linspace(range_sampling[0],range_sampling[1],n_sampling)
+		else:
+			time_variable = np.sort(np.random.uniform(low=range_sampling[0], high=range_sampling[1], size=(n_sampling,)))
+
+	# the mean and std of for the noise is calculated from the residuals
+	noise_mean = resids.mean()
+	noise_std = resids.std()
+	noise_npts = n_sampling
+	noise = np.random.normal(noise_mean, noise_std, noise_npts).reshape(noise_npts,1)
+
+	# calculate the predicted cosinor curve
+	predicted = project_cosionor_model(MESOR, AMPLITUDE, ACROPHASE, TIME_VAR = time_variable, PERIOD = period)
+	sim_endog = noise + predicted
+	sim_R2, sim_MESOR, _, sim_AMPLITUDE, sim_SE_AMPLITUDE, sim_ACROPHASE, sim_SE_ACROPHASE, sim_Fmodel, _, sim_tAMPLITUDE, _, _ = glm_cosinor(endog = sim_endog, 
+																time_var = time_variable,
+																period = period,
+																calc_MESOR = True,
+																output_fit_only = False)
+
+	ACROPHASE_24 = np.zeros_like(sim_ACROPHASE)
+	for j, per in enumerate(period):
+		acrotemp = np.abs(sim_ACROPHASE[j]/(2*np.pi)) * per
+		acrotemp[acrotemp>per] -= per
+		ACROPHASE_24[j] = acrotemp
+
+	p_values = f.sf(sim_Fmodel, DF_Between, DF_Within)
+	return(sim_R2.squeeze(), sim_Fmodel.squeeze(), sim_tAMPLITUDE.squeeze(), ACROPHASE_24.squeeze(), p_values.squeeze())
 
 def regression_f_ratio(endog, exog_m1, exog_m2, covars = None):
 	"""
@@ -208,9 +266,57 @@ def glm_cosinor(endog, time_var, exog = None, dmy_covariates = None, rand_array 
 
 		return R2, MESOR, SE_MESOR, np.array(AMPLITUDE), np.array(SE_AMPLITUDE), np.array(ACROPHASE), np.array(SE_ACROPHASE), Fmodel, tMESOR, np.abs(tAMPLITUDE), np.abs(tACROPHASE), np.array(tEXOG)
 
+def lm_residuals(endog, exog):
+	"""
+	"""
+	if exog.ndim == 1:
+		exog = stack_ones(exog)
+	if np.mean(exog[:,0]) != 1:
+		exog = stack_ones(exog)
+	a = cy_lin_lstsqr_mat(exog,endog)
+	endog = endog - np.dot(exog,a)
+	return endog
+
+def project_cosionor_model(MESOR, AMPLITUDE, ACROPHASE, TIME_VAR, PERIOD = [24.0]):
+	TIME_VAR = np.array(TIME_VAR)
+	n = len(TIME_VAR)
+	r = len(MESOR)
+	proj = MESOR
+	for j, per in enumerate(PERIOD):
+		proj = proj + AMPLITUDE[j,:]*np.cos((np.divide(2*np.pi*np.tile(TIME_VAR,r).reshape(r,n).T, per) + ACROPHASE[j,:]))
+	return proj
+
+def residual_cosinor(endog, time_var, period = [24.0]):
+	n = endog.shape[0]
+	num_period = len(period)
+	exog_vars = np.ones((n))
+	for i in range(num_period):
+		exog_vars = np.column_stack((exog_vars,np.cos(np.divide(2.0*np.pi*time_var, period[i]))))
+		exog_vars = np.column_stack((exog_vars,np.sin(np.divide(2.0*np.pi*time_var, period[i]))))
+	return np.array(lm_residuals(endog, exog_vars))
+
+
+
+
 def periodogram():
 	print("To-do")
 
 def sliding_window_cosinor():
 	print("To-do")
+
+def check_columns(pdData):
+	for counter, roi in enumerate(pdData.columns):
+		if counter == 0:
+			num_subjects = len(pdData[roi])
+		a = np.unique(pdData[roi])
+		num_missing = np.sum(pdData[roi].isnull()*1)
+		if len(a) > 10:
+			astr = '[n>10]'
+		else:
+			astr = ','.join(a.astype(np.str))
+			astr = '['+astr+']'
+		if num_missing == 0:
+			print("[%d] : %s\t%s" % (counter, roi, astr))
+		else:
+			print("[%d] : %s\t%s\t\tCONTAINS %d MISSING VARIABLES!" % (counter, roi, astr, num_missing))
 

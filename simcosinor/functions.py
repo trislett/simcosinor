@@ -288,7 +288,10 @@ def lm_residuals(endog, exog):
 def project_cosionor_model(MESOR, AMPLITUDE, ACROPHASE, TIME_VAR, PERIOD = [24.0]):
 	TIME_VAR = np.array(TIME_VAR)
 	n = len(TIME_VAR)
-	r = len(MESOR)
+	try:
+		r = len(MESOR)
+	except:
+		r = 1
 	proj = MESOR
 	for j, per in enumerate(PERIOD):
 		proj = proj + AMPLITUDE[j,:]*np.cos((np.divide(2*np.pi*np.tile(TIME_VAR,r).reshape(r,n).T, per) + ACROPHASE[j,:]))
@@ -326,6 +329,9 @@ def periodogram(endog, time_variable, periodrange = [3, 24], step = 1.0, save_pl
 
 
 def sliding_window_cosinor(endog, time_variable, subset_size = 24, period = [24.0], save_plot = False, outname = 'sliding_window_plot.png'):
+	if endog.ndim == 1:
+		endog = endog.reshape(len(endog),1)
+
 	n_steps = (len(time_variable) - subset_size)
 	step_R2 = []
 	step_mesor = []
@@ -415,7 +421,7 @@ def sliding_window_cosinor(endog, time_variable, subset_size = 24, period = [24.
 		plt.grid(True)
 		plt.savefig(outname, transparent=False, bbox_inches='tight')
 
-def plot_simulations(endog, time_variable, period = [24.0], n_simulations = 200, randomise_time = False, resample_eveningly = False, n_sampling = None, range_sampling = None, outbasename = 'cosinor_simulation_plot'):
+def plot_cosinor_simulations(endog, time_variable, period = [24.0], n_simulations = 200, randomise_time = False, resample_eveningly = False, n_sampling = None, range_sampling = None, outbasename = 'cosinor_simulation_plot'):
 	n = len(endog)
 
 	arr_xtick = np.arange(0, 25, 1)
@@ -437,7 +443,7 @@ def plot_simulations(endog, time_variable, period = [24.0], n_simulations = 200,
 								output_fit_only = False)[:8]
 
 	model_line, times = create_cosinor_fit(period, 
-														MESOR[0],
+														np.squeeze(MESOR),
 														AMPLITUDE,
 														ACROPHASE,
 														time_space = np.linspace(0,24,200))

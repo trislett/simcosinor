@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import argparse
 
-from simcosinor.functions import check_columns, residual_cosinor, run_cosinor_simulation, CosinorExamples
+from simcosinor.functions import check_columns, residual_cosinor, run_cosinor_simulation, plot_cosinor_simulations, periodogram, sliding_window_cosinor, CosinorExamples
 
 DESCRIPTION = "Various simulation of cosinor models."
 
@@ -51,6 +51,16 @@ def getArgumentParser(parser = argparse.ArgumentParser(description = DESCRIPTION
 		default = [24.0],
 		type = float,
 		help="The period for the cosinor model. Only one period is supported right now. Default: %(default)s)")
+	parser.add_argument("-ps", "--plotsimulations", 
+		action='store_true',
+		help="Plot the cosinor model with 200 simulations overlaid")
+	parser.add_argument("-pp", "--plotperiodogram", 
+		action='store_true',
+		help="Plot the periodogram of non-simulated to search for the best period.")
+	parser.add_argument("-pw", "--plotslidingwindow", 
+		nargs = 1,
+		help="Plot the R-sqr, MESOR, amplitude, acrophase, and non-simulated data along. The sliding window is useful to determine if the cosinor metrics are changing over time. Window size is required. e.g., -pw 24.")
+
 	return parser
 
 def run(opts):
@@ -78,6 +88,32 @@ def run(opts):
 	print("[Metric]\t[Mean] [Standard Deviation]")
 	print("R2\t=\t%1.4f [%1.4f]\nAcro24\t=\t%1.4f [%1.4f]\n-logP\t=\t%1.4f [%1.4f]" % (simR2.mean(), simR2.std(), simAcro24.mean(), simAcro24.std(), log10p.mean(), log10p.std()))
 
+	if opts.plotsimulations:
+		plot_cosinor_simulations(endog = data,
+										time_variable = time_h,
+										period = period,
+										n_simulations = 200,
+										randomise_time = opts.randomisetimepoints,
+										resample_eveningly = opts.evenresampling,
+										n_sampling = int(opts.nsamples[0]),
+										range_sampling = opts.samplerange,
+										outbasename = 'cosinor_simulation_plot')
+
+	if opts.plotperiodogram:
+		periodogram(endog = data,
+									time_variable = time_h,
+									periodrange = [3, 24],
+									step = 1.0,
+									save_plot = True,
+									outname = 'periodogram_plot.png')
+
+	if opts.plotslidingwindow: 
+		sliding_window_cosinor(endog = data,
+									time_variable = time_h,
+									subset_size = int(opts.plotslidingwindow[0]),
+									period = [24.0],
+									save_plot = True,
+									outname = 'sliding_window_plot.png')
 
 if __name__ == "__main__":
 	parser = getArgumentParser()

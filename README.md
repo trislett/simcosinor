@@ -1,4 +1,6 @@
 # simcosinor
+[![Build Status](https://travis-ci.org/trislett/simcosinor.svg?branch=master)](https://travis-ci.org/trislett/simcosinor)
+
 Simulations for the cosinor model.
 
 #### Lazy install

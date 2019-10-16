@@ -8,6 +8,7 @@ source python37env/bin/activate
 git clone https://github.com/trislett/simcosinor.git
 cd simcosinor
 pip install .
+cd ..
 ```
 
 #### Some examples
@@ -34,3 +35,39 @@ Run the simulations with randomly dispursed time-points.
 ```
 simcosinor -rand -ns 72 -sr 0 24
 ```
+
+### Plotting examples
+
+Run simulation and generate plots of the right insula gyrus
+
+```
+simcosinor -rand -ps -pp -pw 24 -roi rh.R_Ig
+```
+
+Console output:
+
+```
+Running 10000 simulations...
+[Metric]	[Mean] [Standard Deviation]
+R2	=	0.3061 [0.0841]
+Acro24	=	16.7937 [0.7331]
+-logP	=	12.8657 [4.2723]
+```
+
+Simulation plot:
+
+![Simulation Plot](simcosinor/examples/R_Ig_cosinor_simulation_plot.png)
+
+Residual plot of the cosinor model (used to estimate the error):
+
+![Simulation Plot Residuals](simcosinor/examples/R_Ig_cosinor_simulation_plot_residuals.png)
+
+Periodogram:
+
+![Periodogram](simcosinor/examples/R_Ig_periodogram_plot.png)
+
+
+Sliding window (size = 24):
+
+![Sliding window](simcosinor/examples/R_Ig_sliding_window_plot.png)
+

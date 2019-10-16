@@ -111,7 +111,7 @@ def run(opts):
 		sliding_window_cosinor(endog = data,
 									time_variable = time_h,
 									subset_size = int(opts.plotslidingwindow[0]),
-									period = [24.0],
+									period = period,
 									save_plot = True,
 									outname = 'sliding_window_plot.png')
 

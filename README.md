@@ -23,7 +23,7 @@ Run the simulations using 24 random times points only.
 simcosinor -rand -ns 24
 ```
 
-Run the simulations with evenling dispursed time-points, but limited from 11:30am until 11:30pm.
+Run the simulations with eveningly dispursed time-points, but limited from 11:30am until 11:30pm.
 
 ```
 simcosinor -rand -ns 72 -sr 11.5 23.5 -er

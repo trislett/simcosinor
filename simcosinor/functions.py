@@ -4,9 +4,13 @@ import os
 import numpy as np
 from simcosinor.cynumstats import cy_lin_lstsqr_mat_residual, cy_lin_lstsqr_mat, se_of_slope
 from scipy.stats import t, f, norm
+from matplotlib import pyplot as plt
+from matplotlib.ticker import StrMethodFormatter
 
-def example_file():
-	return("%s/simcosinor/examples/examples_subjects_norm.csv" % os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+
+class CosinorExamples:
+	three_subjects_normed = "%s/simcosinor/examples/examples_subjects_norm.csv" % os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+
 
 def run_cosinor_simulation(endog, time_variable, period = [24.0], resids = None, randomise_time = False, resample_eveningly = False, n_sampling = None, range_sampling = None, i = 0):
 	n = len(endog)
@@ -25,7 +29,7 @@ def run_cosinor_simulation(endog, time_variable, period = [24.0], resids = None,
 	# Calculate true Mesor, Amplitude, Acrophase
 	MESOR, AMPLITUDE, ACROPHASE = glm_cosinor(endog = endog, 
 															time_var = time_variable,
-															period = [24.0],
+															period = period,
 															calc_MESOR = True,
 															output_fit_only = True)
 
@@ -38,6 +42,8 @@ def run_cosinor_simulation(endog, time_variable, period = [24.0], resids = None,
 			time_variable = np.linspace(range_sampling[0],range_sampling[1],n_sampling)
 		else:
 			time_variable = np.sort(np.random.uniform(low=range_sampling[0], high=range_sampling[1], size=(n_sampling,)))
+	else:
+		n_sampling = n
 
 	# the mean and std of for the noise is calculated from the residuals
 	noise_mean = resids.mean()
@@ -62,6 +68,7 @@ def run_cosinor_simulation(endog, time_variable, period = [24.0], resids = None,
 
 	p_values = f.sf(sim_Fmodel, DF_Between, DF_Within)
 	return(sim_R2.squeeze(), sim_Fmodel.squeeze(), sim_tAMPLITUDE.squeeze(), ACROPHASE_24.squeeze(), p_values.squeeze())
+
 
 def regression_f_ratio(endog, exog_m1, exog_m2, covars = None):
 	"""
@@ -265,6 +272,7 @@ def glm_cosinor(endog, time_var, exog = None, dmy_covariates = None, rand_array 
 
 		return R2, MESOR, SE_MESOR, np.array(AMPLITUDE), np.array(SE_AMPLITUDE), np.array(ACROPHASE), np.array(SE_ACROPHASE), Fmodel, tMESOR, np.abs(tAMPLITUDE), np.abs(tACROPHASE), np.array(tEXOG)
 
+
 def lm_residuals(endog, exog):
 	"""
 	"""
@@ -276,6 +284,7 @@ def lm_residuals(endog, exog):
 	endog = endog - np.dot(exog,a)
 	return endog
 
+
 def project_cosionor_model(MESOR, AMPLITUDE, ACROPHASE, TIME_VAR, PERIOD = [24.0]):
 	TIME_VAR = np.array(TIME_VAR)
 	n = len(TIME_VAR)
@@ -284,6 +293,7 @@ def project_cosionor_model(MESOR, AMPLITUDE, ACROPHASE, TIME_VAR, PERIOD = [24.0
 	for j, per in enumerate(PERIOD):
 		proj = proj + AMPLITUDE[j,:]*np.cos((np.divide(2*np.pi*np.tile(TIME_VAR,r).reshape(r,n).T, per) + ACROPHASE[j,:]))
 	return proj
+
 
 def residual_cosinor(endog, time_var, period = [24.0]):
 	n = endog.shape[0]
@@ -295,13 +305,193 @@ def residual_cosinor(endog, time_var, period = [24.0]):
 	return np.array(lm_residuals(endog, exog_vars))
 
 
+def periodogram(endog, time_variable, periodrange = [3, 24], step = 1.0, save_plot = False, outname = 'periodogram_plot.png'):
+	# Check that endog has two dimensions
+	if endog.ndim == 1:
+		endog = endog.reshape(len(endog),1)
+
+	periods =  np.arange(periodrange[0],(periodrange[1]+step),step)
+	coeff = []
+	for period in periods:
+		period = [period]
+		coeff.append(glm_cosinor(endog = endog, time_var = time_variable, period = period, calc_MESOR = True, output_fit_only = False)[0])
+	if save_plot:
+		plt.plot(periods, coeff)
+		plt.ylabel("R-squared of cosinor model")
+		plt.xlabel("Period")
+		plt.xticks(np.arange(0, (periodrange[1]+step), step))
+		plt.grid(True)
+		plt.title("Periodogram")
+		plt.savefig(outname, transparent=False, bbox_inches='tight')
 
 
-def periodogram():
-	print("To-do")
+def sliding_window_cosinor(endog, time_variable, subset_size = 24, period = [24.0], save_plot = False, outname = 'sliding_window_plot.png'):
+	n_steps = (len(time_variable) - subset_size)
+	step_R2 = []
+	step_mesor = []
+	step_mesor_SE = []
+	step_ampl = []
+	step_ampl_SE = []
+	step_acro24 = []
+	step_neglogp = []
+	steps = []
 
-def sliding_window_cosinor():
-	print("To-do")
+	for i in range(n_steps):
+		temp_time = time_variable[i:int(i+subset_size)]
+		temp_endog = endog[i:int(i+subset_size),0]
+
+		n = len(temp_endog)
+		k = len(period)*2 + 1
+		DF_Between = k - 1 # aka df model
+		DF_Within = n - k # aka df residuals
+
+		R2, MESOR, SE_MESOR, AMPLITUDE, SE_AMPLITUDE, ACROPHASE, SE_ACROPHASE, Fmodel = glm_cosinor(endog = temp_endog, 
+									time_var = temp_time,
+									period = period,
+									calc_MESOR = True,
+									output_fit_only = False)[:8]
+		ACROPHASE_24 = np.zeros_like(ACROPHASE)
+		for j, per in enumerate(period):
+			acrotemp = np.abs(ACROPHASE[j]/(2*np.pi)) * per
+			acrotemp[acrotemp>per] -= per
+			ACROPHASE_24[j] = acrotemp
+
+		step_R2.append(np.squeeze(R2))
+		step_mesor.append(np.squeeze(MESOR))
+		step_mesor_SE.append(np.squeeze(SE_MESOR))
+		step_ampl.append(np.squeeze(AMPLITUDE))
+		step_ampl_SE.append(np.squeeze(SE_AMPLITUDE))
+		step_acro24.append(np.squeeze(ACROPHASE_24))
+		step_neglogp.append(-np.log10(f.sf(Fmodel, DF_Between, DF_Within)))
+		steps.append(i+1)
+	if save_plot:
+		step_R2 = np.array(step_R2)
+		step_mesor =  np.array(step_mesor)
+		step_mesor_SE =  np.array(step_mesor_SE)
+		step_ampl =  np.array(step_ampl)
+		step_ampl_SE =  np.array(step_ampl_SE)
+		step_acro24 = np.array(step_acro24)
+		step_neglogp =  np.array(step_neglogp)
+
+		plt.figure(figsize=(12,24))
+		plt.subplot(5, 1, 1)
+		plt.plot(steps, step_R2)
+		plt.title('Sliding window plots')
+		plt.ylabel('R-sqr')
+		plt.gca().yaxis.set_major_formatter(StrMethodFormatter('{x:,.2f}'))
+		plt.xticks(steps)
+		plt.grid(True)
+
+		plt.subplot(5, 1, 2)
+		plt.plot(steps, step_mesor)
+		plt.fill_between(steps, step_mesor - step_mesor_SE, step_mesor + step_mesor_SE, alpha=0.2, color='k')
+		plt.ylabel('MESOR')
+		plt.gca().yaxis.set_major_formatter(StrMethodFormatter('{x:,.2f}'))
+		plt.xticks(steps)
+		plt.grid(True)
+
+		plt.subplot(5, 1, 3)
+		plt.plot(steps, step_ampl)
+		plt.fill_between(steps, step_ampl - step_ampl_SE, step_ampl + step_ampl_SE, alpha=0.2, color='k')
+		plt.ylabel('Amplitude')
+		plt.gca().yaxis.set_major_formatter(StrMethodFormatter('{x:,.2f}'))
+		plt.xticks(steps)
+		plt.grid(True)
+
+		plt.subplot(5, 1, 4)
+		plt.plot(steps, step_acro24)
+		plt.ylabel('Acrophase [24h]')
+		plt.gca().yaxis.set_major_formatter(StrMethodFormatter('{x:,.1f}'))
+		plt.xticks(steps)
+		plt.grid(True)
+
+		plt.subplot(5, 1, 5)
+		plt.plot(steps, step_neglogp)
+		plt.ylabel('-logP')
+		plt.axhline(y=-np.log10(0.05), color='k', linestyle=':')
+		plt.gca().yaxis.set_major_formatter(StrMethodFormatter('{x:,.2f}'))
+		plt.xticks(steps)
+		plt.xlabel("Step (size = %d)" % subset_size)
+		plt.grid(True)
+		plt.savefig(outname, transparent=False, bbox_inches='tight')
+
+def plot_simulations(endog, time_variable, period = [24.0], n_simulations = 200, randomise_time = False, resample_eveningly = False, n_sampling = None, range_sampling = None, outbasename = 'cosinor_simulation_plot'):
+	n = len(endog)
+
+	arr_xtick = np.arange(0, 25, 1)
+
+	resids = residual_cosinor(endog = endog, time_var = time_variable, period = period)
+	plt.scatter(time_variable, resids, marker = '.', color='k')
+	plt.axhline(y=0, color='k')
+	plt.axhline(y=resids.std(), color='k', ls = ":")
+	plt.axhline(y=-resids.std(), color='k', ls = ":")
+	plt.xticks(arr_xtick)
+	plt.title('Residuals of Cosinor Model')
+	plt.savefig("%s_residuals.png" % outbasename, transparent=False, bbox_inches='tight')
+	plt.close()
+
+	R2, MESOR, SE_MESOR, AMPLITUDE, SE_AMPLITUDE, ACROPHASE, SE_ACROPHASE, Fmodel = glm_cosinor(endog = endog, 
+								time_var = time_variable,
+								period = period,
+								calc_MESOR = True,
+								output_fit_only = False)[:8]
+
+	model_line, times = create_cosinor_fit(period, 
+														MESOR[0],
+														AMPLITUDE,
+														ACROPHASE,
+														time_space = np.linspace(0,24,200))
+	plt.figure(figsize=(12,8))
+	plt.plot(times, model_line, c='k')
+	plt.scatter(time_variable, endog, marker = '.')
+
+	if randomise_time:
+		if n_sampling is None:
+			n_sampling = n
+		if range_sampling is None:
+			range_sampling = [0,23.99]
+		if resample_eveningly:
+			sim_time = np.linspace(range_sampling[0],range_sampling[1],n_sampling)
+		else:
+			sim_time = np.sort(np.random.uniform(low=range_sampling[0], high=range_sampling[1], size=(n_sampling,)))
+	else:
+		n_sampling = n
+		sim_time = time_variable
+
+	# the mean and std of for the noise is calculated from the residuals
+	noise_mean = resids.mean()
+	noise_std = resids.std()
+	noise_npts = n_sampling
+
+	for i in range(n_simulations):
+		noise = np.random.normal(noise_mean, noise_std, noise_npts).reshape(noise_npts,1)
+		# calculate the predicted cosinor curve
+		predicted = project_cosionor_model(MESOR, AMPLITUDE, ACROPHASE, TIME_VAR = sim_time, PERIOD = period)
+		sim_endog = noise + predicted
+		sMESOR, sAMPLITUDE, sACROPHASE = glm_cosinor(endog = sim_endog, 
+																time_var = sim_time,
+																period = period,
+																calc_MESOR = True,
+																output_fit_only = True)
+
+
+		pred_time = np.linspace(0,25, 200)
+		predicted = project_cosionor_model(sMESOR, sAMPLITUDE, sACROPHASE, TIME_VAR = pred_time, PERIOD = period)
+		plt.plot(pred_time, predicted, alpha = 0.2, linestyle = ':', c='k')
+	plt.xticks(arr_xtick)
+	plt.title('Cosinor Model + Simulated Curves')
+	plt.xlabel('Time (hour)')
+	plt.savefig("%s.png" % outbasename, transparent=False, bbox_inches='tight')
+	plt.close()
+
+
+def create_cosinor_fit(period, MESOR, AMPLITUDE, ACROPHASE, time_space = np.linspace(0,24,200)):
+	if ACROPHASE.shape[1] == 1:
+		model_line = MESOR
+		for j, per in enumerate(period):
+			model_line += float(AMPLITUDE[j]) * np.cos(np.divide((2*np.pi*time_space),per) + float(ACROPHASE[j]))
+	return(model_line, time_space)
+
 
 def check_columns(pdData):
 	for counter, roi in enumerate(pdData.columns):

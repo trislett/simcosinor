@@ -1,18 +1,19 @@
 #!/usr/bin/env python
 
 import os
+import sys
 import numpy as np
 import pandas as pd
 import argparse
 
-from simcosinor.functions import check_columns, residual_cosinor, run_cosinor_simulation, example_file
+from simcosinor.functions import check_columns, residual_cosinor, run_cosinor_simulation, CosinorExamples
 
 DESCRIPTION = "Various simulation of cosinor models."
 
 def getArgumentParser(parser = argparse.ArgumentParser(description = DESCRIPTION)):
 	parser.add_argument("-i", "--csv",
 		nargs = 1,
-		default = [example_file()],
+		default = [CosinorExamples.three_subjects_normed],
 		type = str,
 		help="Input CSV file. Default: %(default)s)")
 	parser.add_argument("-rand", "--randomisetimepoints",
@@ -40,6 +41,16 @@ def getArgumentParser(parser = argparse.ArgumentParser(description = DESCRIPTION
 	parser.add_argument("-on", "--outputcolumnnames", 
 		help="Outputs the input CSV column names. Useful for getting the name of different regions of interest.", 
 		action='store_true')
+	parser.add_argument("-ct", "--csvtimevariable", 
+		nargs = 1,
+		default = ['scan_time'],
+		type = str,
+		help="The variable name for time from the input csv (-i *.csv). Default: %(default)s)")
+	parser.add_argument("-p", "--period", 
+		nargs = 1,
+		default = [24.0],
+		type = float,
+		help="The period for the cosinor model. Only one period is supported right now. Default: %(default)s)")
 	return parser
 
 def run(opts):
@@ -51,10 +62,10 @@ def run(opts):
 		quit()
 
 	roi = opts.roi[0]
-	scan_time = 'scan_time'
+	scan_time = opts.csvtimevariable[0]
 	data = np.array(pdCSV[roi])
 	time_h = np.array(pdCSV[scan_time])
-	period = [24.0]
+	period = opts.period
 	resids = residual_cosinor(endog = data, time_var = time_h, period = period)
 
 	print("Running 10000 simulations...")
@@ -64,7 +75,7 @@ def run(opts):
 	simAcro24 = np.array(simAcro24)
 	log10p = -np.log(simPvalues)
 
-	print("[Metric] [Mean] [Standard Deviation]")
+	print("[Metric]\t[Mean] [Standard Deviation]")
 	print("R2\t=\t%1.4f [%1.4f]\nAcro24\t=\t%1.4f [%1.4f]\n-logP\t=\t%1.4f [%1.4f]" % (simR2.mean(), simR2.std(), simAcro24.mean(), simAcro24.std(), log10p.mean(), log10p.std()))
 
 

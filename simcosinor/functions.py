@@ -13,6 +13,44 @@ class CosinorExamples:
 
 
 def run_cosinor_simulation(endog, time_variable, period = [24.0], resids = None, randomise_time = False, resample_eveningly = False, n_sampling = None, range_sampling = None, i = 0):
+
+	"""
+	Cosinor simulations. The MESOR, amplitude, and acrophase are determined from real data. Simulated data are calculated by adding random gaussian noise to the projected cosinor model. For estimationg of the noise, the residuals from cosinor model are used to determine the mean, and standard deviation. 
+	
+	Parameters
+	----------
+	endog : array
+		Endogenous (dependent) variable array of real data.
+	time_variable : array
+		Time points.
+	period : array
+		The period(s) of the cosinor model
+	resids : array
+		[optional] input precomputed residuals. Otherwise, it is calculated.
+	randomise_time : bool
+		Randomise the time points for the simulation within the sample range.
+	resample_eveningly : bool
+		The time points will be equally distributed across the sample range.
+	n_sampling : int
+		The number of time points to simulate
+	range_sampling: array
+		The time range for simulating [start, stop]
+	i : int
+		Iterator for parallel processing.
+	Returns
+	---------
+	sim_R2 : float
+		R-squared of the simulated model
+	sim_Fmodel : float
+		F-value of the simulated model
+	sim_tAMPLITUDE : float
+		The amplitude T-value(s) of the simulated model
+	ACROPHASE_24 : float
+		The acrophase of the simulated model converted to 24H from radians
+	p_values
+		The simulated model p-value
+	"""
+
 	n = len(endog)
 	k = len(period)*2 + 1
 	DF_Between = k - 1 # aka df model

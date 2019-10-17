@@ -273,6 +273,109 @@ def glm_cosinor(endog, time_var, exog = None, dmy_covariates = None, rand_array 
 		return R2, MESOR, SE_MESOR, np.array(AMPLITUDE), np.array(SE_AMPLITUDE), np.array(ACROPHASE), np.array(SE_ACROPHASE), Fmodel, tMESOR, np.abs(tAMPLITUDE), np.abs(tACROPHASE), np.array(tEXOG)
 
 
+def permute_cosinor(endog, time_variable, period, iterator, perm_stat = 'Fmodel', blocking = None):
+	# Check that endog has two dimensions
+	if endog.ndim == 1:
+		endog = endog.reshape(len(endog),1)
+	if perm_stat == 'Fmodel':
+		stat_choice = 7
+	else:
+		stat_choice = 0
+	rand_array = np.random.permutation(list(range(len(time_variable))))
+	perm_stat = glm_cosinor(endog = endog,
+							time_var = time_variable,
+							rand_array = rand_array,
+							period = period)[stat_choice]
+	return(perm_stat)
+
+def plot_permuted_model(endog, time_variable, period = [24.0], n_perm = 10000, outname = 'cosinor_plot_permuted.png'):
+	if endog.ndim == 1:
+		endog = endog.reshape(len(endog),1)
+	resids = residual_cosinor(endog = endog, time_var = time_variable, period = period)
+	Fperm = np.array([permute_cosinor(endog = resids, time_variable = time_variable, period = period, iterator = i) for i in range(n_perm)])
+	n = len(time_variable)
+	k = len(period)*2 + 1
+	DF_Between = k - 1 # aka df model
+	DF_Within = n - k # aka df residuals
+
+
+	R2, MESOR, SE_MESOR, AMPLITUDE, SE_AMPLITUDE, ACROPHASE, SE_ACROPHASE, Fmodel = glm_cosinor(endog = endog, 
+								time_var = time_variable,
+								period = period,
+								calc_MESOR = True,
+								output_fit_only = False)[:8]
+
+	model_line, times = create_cosinor_fit(period, 
+														MESOR[0],
+														AMPLITUDE,
+														ACROPHASE,
+														time_space = np.linspace(0,24,200))
+	plt.figure(figsize=(12,8))
+	plt.subplot(2, 1, 1)
+	plt.title("Plot of the Cosinor Model")
+	plt.plot(times, model_line, c='k')
+	plt.scatter(time_variable, endog, marker = '.')
+	plt.fill_between(times, model_line - np.squeeze(SE_AMPLITUDE), model_line + np.squeeze(SE_AMPLITUDE), alpha=0.2, color='k')
+	# Mesor
+	plt.axhline(y=MESOR[0], color='k', alpha = 0.2)
+	plt.axhline(y=(MESOR[0] - np.squeeze(SE_MESOR)), color='k', ls=':', alpha = 0.2)
+	plt.axhline(y=(MESOR[0] + np.squeeze(SE_MESOR)), color='k', ls=':', alpha = 0.2)
+
+	ACROPHASE_24 = np.zeros_like(ACROPHASE)
+	for j, per in enumerate(period):
+		acrotemp = np.abs(ACROPHASE[j]/(2*np.pi)) * per
+		acrotemp[acrotemp>per] -= per
+		ACROPHASE_24[j] = acrotemp
+	ACROPHASE_SE_24 = np.zeros_like(SE_ACROPHASE)
+	for j, per in enumerate(period):
+		acrotemp = np.abs(SE_ACROPHASE[j]/(2*np.pi)) * per
+		acrotemp[acrotemp>per] -= per
+		ACROPHASE_SE_24[j] = acrotemp
+
+	a = np.squeeze(ACROPHASE_24)
+	a_se = np.squeeze(ACROPHASE_SE_24)
+	plt.axvline(x=a.squeeze(), color='k', alpha = 0.2)
+	plt.axvline(x=(a - a_se), color='k', ls=':', alpha = 0.2)
+	plt.axvline(x=(a + a_se), color='k', ls=':', alpha = 0.2)
+	plt.xticks(list(range(25)))
+
+	plt.subplot(2, 1, 2)
+	plt.title("Histogram of F(model) values from %d permutations" % (n_perm))
+	plt.hist(Fperm, bins=50)
+	txt = r"$y(t) = %1.2f $" % (MESOR)
+	for i, per in enumerate(period):
+		txt += r"$+ %1.3f\mathrm{cos} (2 \pi (t)/%d %1.3f)$" % (AMPLITUDE[i], per, ACROPHASE[i])
+
+	if np.squeeze(Fmodel) > Fperm.max():
+		pp_text = r'$\mathrm{p(permuted)} < 0.0001$'
+	else:
+		p_array=np.zeros((n_perm))
+		for j in range(n_perm):
+			p_array[j] = np.true_divide(j,n_perm)
+		stat_loc = np.searchsorted(np.sort(Fperm.squeeze()), Fmodel, side="right")
+		pp = 1 - p_array[stat_loc]
+		pp_text = r'$\mathrm{p(permuted)} = %1.3e$' % pp
+
+	textstr = '\n'.join((
+		txt,
+		r'R^2 = %1.2f' % R2,
+		r'F(%d,%d) = %1.2f' % (DF_Between, DF_Within, Fmodel),
+		r'$\mathrm{p(parametric)}=%1.3e$' % (f.sf(Fmodel, DF_Between, DF_Within)),
+		pp_text))
+
+	
+	left, width = .25, .5
+	bottom, height = .25, .5
+	right = left + width
+	top = bottom + height
+	plt.text(0.6, 0.6, textstr,
+					transform=plt.gca().transAxes,
+					bbox=dict(facecolor='b', alpha=0.1))
+	critF = np.sort(Fperm.squeeze())[::-1][int(0.05*n_perm)]
+	plt.axvline(x=critF, color='k', alpha = 0.2)
+	plt.savefig(outname, transparent=False, bbox_inches='tight')
+	plt.close()
+
 def lm_residuals(endog, exog):
 	"""
 	"""
@@ -326,6 +429,7 @@ def periodogram(endog, time_variable, periodrange = [3, 24], step = 1.0, save_pl
 		plt.grid(True)
 		plt.title("Periodogram")
 		plt.savefig(outname, transparent=False, bbox_inches='tight')
+		plt.close()
 
 
 def sliding_window_cosinor(endog, time_variable, subset_size = 24, period = [24.0], save_plot = False, outname = 'sliding_window_plot.png'):
@@ -420,6 +524,7 @@ def sliding_window_cosinor(endog, time_variable, subset_size = 24, period = [24.
 		plt.xlabel("Step (size = %d)" % subset_size)
 		plt.grid(True)
 		plt.savefig(outname, transparent=False, bbox_inches='tight')
+		plt.close()
 
 def plot_cosinor_simulations(endog, time_variable, period = [24.0], n_simulations = 200, randomise_time = False, resample_eveningly = False, n_sampling = None, range_sampling = None, outbasename = 'cosinor_simulation_plot'):
 	n = len(endog)

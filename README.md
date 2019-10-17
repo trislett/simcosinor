@@ -43,7 +43,7 @@ simcosinor -rand -ns 72 -sr 0 24
 Run simulation and generate plots of the right insula gyrus
 
 ```
-simcosinor -rand -ps -pp -pw 24 -roi rh.R_Ig
+simcosinor -rand -ps -pp -pw 24 -ppm -roi rh.R_Ig
 ```
 
 Console output:
@@ -72,4 +72,8 @@ Periodogram:
 Sliding window (size = 24):
 
 ![Sliding window](simcosinor/examples/R_Ig_sliding_window_plot.png)
+
+Cosinor plot with permutation testing:
+
+![Permutations](simcosinor/examples/R_Ig_cosinor_plot_permuted.png)
 

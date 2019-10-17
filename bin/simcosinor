@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import argparse
 
-from simcosinor.functions import check_columns, residual_cosinor, run_cosinor_simulation, plot_cosinor_simulations, periodogram, sliding_window_cosinor, CosinorExamples
+from simcosinor.functions import check_columns, residual_cosinor, run_cosinor_simulation, plot_cosinor_simulations, plot_permuted_model, periodogram, sliding_window_cosinor, CosinorExamples
 
 DESCRIPTION = "Various simulation of cosinor models."
 
@@ -54,13 +54,15 @@ def getArgumentParser(parser = argparse.ArgumentParser(description = DESCRIPTION
 	parser.add_argument("-ps", "--plotsimulations", 
 		action='store_true',
 		help="Plot the cosinor model with 200 simulations overlaid")
+	parser.add_argument("-ppm", "--plotpermutedmodel", 
+		action='store_true',
+		help="Plot the cosinor model with non-parametric statistics [not-simulated].")
 	parser.add_argument("-pp", "--plotperiodogram", 
 		action='store_true',
 		help="Plot the periodogram of non-simulated to search for the best period.")
 	parser.add_argument("-pw", "--plotslidingwindow", 
 		nargs = 1,
 		help="Plot the R-sqr, MESOR, amplitude, acrophase, and non-simulated data along. The sliding window is useful to determine if the cosinor metrics are changing over time. Window size is required. e.g., -pw 24.")
-
 	return parser
 
 def run(opts):
@@ -98,6 +100,12 @@ def run(opts):
 										n_sampling = int(opts.nsamples[0]),
 										range_sampling = opts.samplerange,
 										outbasename = 'cosinor_simulation_plot')
+
+	if opts.plotpermutedmodel:
+		plot_permuted_model(endog = data,
+									time_variable = time_h,
+									period = period,
+									n_perm = 10000) 
 
 	if opts.plotperiodogram:
 		periodogram(endog = data,

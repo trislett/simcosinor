@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import argparse
 
-from simcosinor.functions import check_columns, residual_cosinor, run_cosinor_simulation, plot_cosinor_simulations, plot_permuted_model, periodogram, sliding_window_cosinor, CosinorExamples
+from simcosinor.functions import check_columns, load_vars, residual_cosinor, lm_residuals, run_cosinor_simulation, plot_cosinor_simulations, plot_permuted_model, periodogram, sliding_window_cosinor, CosinorExamples
 
 DESCRIPTION = "Various simulation of cosinor models."
 
@@ -15,7 +15,8 @@ def getArgumentParser(parser = argparse.ArgumentParser(description = DESCRIPTION
 		nargs = 1,
 		default = [CosinorExamples.three_subjects_normed],
 		type = str,
-		help="Input CSV file. Default: %(default)s)")
+		metavar=('*.csv'),
+		help="Input comma-separated values (CSV) file. Default: %(default)s)")
 	parser.add_argument("-rand", "--randomisetimepoints",
 		action = 'store_true',
 		help="Randomise the sampling time for the prediction model instead of using the actual times.")
@@ -23,12 +24,14 @@ def getArgumentParser(parser = argparse.ArgumentParser(description = DESCRIPTION
 		nargs = 1,
 		default = [72],
 		type = int,
+		metavar=('int'),
 		required = False,
 		help="The number of samples to simulate. Default: %(default)s)")
 	parser.add_argument("-sr", "--samplerange",
 		nargs = 2,
 		default = [0., 23.99],
 		type = float,
+		metavar=('float'),
 		required = False,
 		help="The lower and upper range for data collection in hours. -r {low} {high}. Default: %(default)s)")
 	parser.add_argument("-er", "--evenresampling",
@@ -37,18 +40,15 @@ def getArgumentParser(parser = argparse.ArgumentParser(description = DESCRIPTION
 	parser.add_argument("-roi",
 		nargs = 1,
 		default = ['lh.L_6r'],
+		metavar=('str'),
 		help="The ROI to build the cosinor model (the residuals from the cosinor model will be used to determine the noise). Default: %(default)s)")
 	parser.add_argument("-on", "--outputcolumnnames", 
 		help="Outputs the input CSV column names. Useful for getting the name of different regions of interest.", 
 		action='store_true')
-	parser.add_argument("-ct", "--csvtimevariable", 
-		nargs = 1,
-		default = ['scan_time'],
-		type = str,
-		help="The variable name for time from the input csv (-i *.csv). Default: %(default)s)")
 	parser.add_argument("-p", "--period", 
 		nargs = 1,
 		default = [24.0],
+		metavar=('float'),
 		type = float,
 		help="The period for the cosinor model. Only one period is supported right now. Default: %(default)s)")
 	parser.add_argument("-ps", "--plotsimulations", 
@@ -63,6 +63,22 @@ def getArgumentParser(parser = argparse.ArgumentParser(description = DESCRIPTION
 	parser.add_argument("-pw", "--plotslidingwindow", 
 		nargs = 1,
 		help="Plot the R-sqr, MESOR, amplitude, acrophase, and non-simulated data along. The sliding window is useful to determine if the cosinor metrics are changing over time. Window size is required. e.g., -pw 24.")
+	parser.add_argument("-ct", "--csvtimevariable", 
+		nargs = 1,
+		default = ['scan_time'],
+		metavar=('str'),
+		type = str,
+		help="The variable name for time from the input csv (-i *.csv). Default: %(default)s)")
+	# analysis options
+	parser.add_argument("-bs", "--bysubject", 
+		nargs = 1,
+		type = str,
+		help="Option to run the analysis separately by subject. The input must include the subject variable from the CSV (hint: use -on to find subject variable name). -bs {subject_variable}")
+	parser.add_argument("-ic", "--initcovar",
+		help="Covariates of no interest for two step analyses.",
+		nargs='+',
+		metavar=('exogn', '{d|c}'),
+		required=False)
 	return parser
 
 def run(opts):
@@ -75,53 +91,89 @@ def run(opts):
 
 	roi = opts.roi[0]
 	scan_time = opts.csvtimevariable[0]
-	data = np.array(pdCSV[roi])
-	time_h = np.array(pdCSV[scan_time])
-	period = opts.period
-	resids = residual_cosinor(endog = data, time_var = time_h, period = period)
 
-	print("Running 10000 simulations...")
-	simR2, simF, simAmpl, simAcro24, simPvalues = zip(*[run_cosinor_simulation(endog = data, time_variable = time_h, period = period, resids = resids, randomise_time = opts.randomisetimepoints, resample_eveningly = opts.evenresampling, n_sampling = int(opts.nsamples[0]), range_sampling = opts.samplerange) for i in range(10000)])
+	if opts.bysubject:
+		subject_arr = pdCSV[opts.bysubject[0]]
+	else:
+		subject_arr = np.full(len(scan_time), 'all')
 
-	simR2 = np.array(simR2)
-	simAcro24 = np.array(simAcro24)
-	log10p = -np.log(simPvalues)
+	for subject in np.unique(subject_arr):
+		# plot names
+		plotbasename_simulations = '%s_cosinor_simulation_plot' % roi
+		plotname_perm_model = '%s_cosinor_plot_permuted.png' % roi
+		plotname_periodogram = '%s_periodogram_plot.png' % roi
+		plotname_sliding_window_cosinor = '%s_sliding_window_plot.png' % roi
 
-	print("[Metric]\t[Mean] [Standard Deviation]")
-	print("R2\t=\t%1.4f [%1.4f]\nAcro24\t=\t%1.4f [%1.4f]\n-logP\t=\t%1.4f [%1.4f]" % (simR2.mean(), simR2.std(), simAcro24.mean(), simAcro24.std(), log10p.mean(), log10p.std()))
+		if opts.bysubject:
+			pdCSV_sub = pdCSV[subject_arr==subject]
+			# add subject name
+			plotbasename_simulations = "%s_%s" % (subject,plotbasename_simulations)
+			plotname_perm_model = "%s_%s" % (subject,plotname_perm_model)
+			plotname_periodogram = "%s_%s" % (subject,plotname_periodogram)
+			plotname_sliding_window_cosinor = "%s_%s" % (subject, plotname_sliding_window_cosinor)
+		else:
+			pdCSV_sub = pdCSV
 
-	if opts.plotsimulations:
-		plot_cosinor_simulations(endog = data,
+		data = np.array(pdCSV_sub[roi])
+
+		if opts.initcovar:
+			init_covars, init_covarsnames = load_vars(pdCSV_sub, variables = opts.initcovar, exog = [], names = [], demean_flag = False)
+			dmy_init_covars = np.concatenate(init_covars,1)
+			data = lm_residuals(data, dmy_init_covars)
+
+
+		time_h = np.array(pdCSV_sub[scan_time])
+		period = opts.period
+		resids = residual_cosinor(endog = data, time_var = time_h, period = period)
+
+		print("Running 10000 simulations...")
+		print("ROI = %s" % roi)
+		if opts.bysubject:
+			print("Subject = %s" % subject)
+
+		# eventually port this out to joblib
+		simR2, simF, simAmpl, simAcro24, simPvalues = zip(*[run_cosinor_simulation(endog = data, time_variable = time_h, period = period, resids = resids, randomise_time = opts.randomisetimepoints, resample_eveningly = opts.evenresampling, n_sampling = int(opts.nsamples[0]), range_sampling = opts.samplerange) for i in range(10000)])
+
+		simR2 = np.array(simR2)
+		simAcro24 = np.array(simAcro24)
+		log10p = -np.log(simPvalues)
+
+		print("[Metric]\t[Mean] [Standard Deviation]")
+		print("R2\t=\t%1.4f [%1.4f]\nAcro24\t=\t%1.4f [%1.4f]\n-logP\t=\t%1.4f [%1.4f]" % (simR2.mean(), simR2.std(), simAcro24.mean(), simAcro24.std(), log10p.mean(), log10p.std()))
+
+		if opts.plotsimulations:
+			plot_cosinor_simulations(endog = data,
+											time_variable = time_h,
+											period = period,
+											n_simulations = 200,
+											randomise_time = opts.randomisetimepoints,
+											resample_eveningly = opts.evenresampling,
+											n_sampling = int(opts.nsamples[0]),
+											range_sampling = opts.samplerange,
+											outbasename = plotbasename_simulations)
+
+		if opts.plotpermutedmodel:
+			plot_permuted_model(endog = data,
 										time_variable = time_h,
 										period = period,
-										n_simulations = 200,
-										randomise_time = opts.randomisetimepoints,
-										resample_eveningly = opts.evenresampling,
-										n_sampling = int(opts.nsamples[0]),
-										range_sampling = opts.samplerange,
-										outbasename = 'cosinor_simulation_plot')
+										n_perm = 10000,
+										outname = plotname_perm_model) 
 
-	if opts.plotpermutedmodel:
-		plot_permuted_model(endog = data,
-									time_variable = time_h,
-									period = period,
-									n_perm = 10000) 
+		if opts.plotperiodogram:
+			periodogram(endog = data,
+										time_variable = time_h,
+										periodrange = [3, 24],
+										step = 1.0,
+										save_plot = True,
+										outname = plotname_periodogram)
 
-	if opts.plotperiodogram:
-		periodogram(endog = data,
-									time_variable = time_h,
-									periodrange = [3, 24],
-									step = 1.0,
-									save_plot = True,
-									outname = 'periodogram_plot.png')
-
-	if opts.plotslidingwindow: 
-		sliding_window_cosinor(endog = data,
-									time_variable = time_h,
-									subset_size = int(opts.plotslidingwindow[0]),
-									period = period,
-									save_plot = True,
-									outname = 'sliding_window_plot.png')
+		if opts.plotslidingwindow: 
+			sliding_window_cosinor(endog = data,
+										time_variable = time_h,
+										subset_size = int(opts.plotslidingwindow[0]),
+										period = period,
+										save_plot = True,
+										outname = plotname_sliding_window_cosinor)
 
 if __name__ == "__main__":
 	parser = getArgumentParser()

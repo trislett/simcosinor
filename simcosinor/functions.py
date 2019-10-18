@@ -411,6 +411,10 @@ def plot_permuted_model(endog, time_variable, period = [24.0], n_perm = 10000, o
 					bbox=dict(facecolor='b', alpha=0.1))
 	critF = np.sort(Fperm.squeeze())[::-1][int(0.05*n_perm)]
 	plt.axvline(x=critF, color='k', alpha = 0.2)
+	if Fmodel > critF:
+		plt.axvline(x=Fmodel, color='g', alpha = .8, ls = '--')
+	else:
+		plt.axvline(x=Fmodel, color='r', alpha = .8, ls = '--')
 	plt.savefig(outname, transparent=False, bbox_inches='tight')
 	plt.close()
 
@@ -458,7 +462,10 @@ def periodogram(endog, time_variable, periodrange = [3, 24], step = 1.0, save_pl
 	coeff = []
 	for period in periods:
 		period = [period]
-		coeff.append(glm_cosinor(endog = endog, time_var = time_variable, period = period, calc_MESOR = True, output_fit_only = False)[0])
+		R2 = glm_cosinor(endog = endog, time_var = time_variable, period = period, calc_MESOR = True, output_fit_only = False)[0]
+		if R2 < 0:
+			R2 = 0
+		coeff.append(R2)
 	if save_plot:
 		plt.plot(periods, coeff)
 		plt.ylabel("R-squared of cosinor model")
@@ -576,6 +583,11 @@ def plot_cosinor_simulations(endog, time_variable, period = [24.0], n_simulation
 	plt.axhline(y=-resids.std(), color='k', ls = ":")
 	plt.xticks(arr_xtick)
 	plt.title('Residuals of Cosinor Model')
+
+	max_r = resids.max()
+	min_r = resids.min()
+	plt.ylim(min_r*1.2, max_r*1.2)
+
 	plt.savefig("%s_residuals.png" % outbasename, transparent=False, bbox_inches='tight')
 	plt.close()
 
@@ -658,3 +670,77 @@ def check_columns(pdData):
 		else:
 			print("[%d] : %s\t%s\t\tCONTAINS %d MISSING VARIABLES!" % (counter, roi, astr, num_missing))
 
+
+def load_vars(pdCSV, variables, exog = [], names = [], demean_flag = True):
+	if len(variables) % 2 == 1:
+		print("Error: each input must be followed by data type. e.g., -ic day d age c (d = discrete, c = continous)")
+	num_exog = int(len(variables) / 2)
+	for i in range(num_exog):
+		j = i * 2 
+		k = j + 1
+		if variables[k] == 'c':
+			print("Coding %s as continous variable" % variables[j])
+			temp = dummy_code(np.array(pdCSV[variables[j]]), iscontinous = True, demean = demean_flag)
+			temp = temp[:,np.newaxis]
+			exog.append(temp)
+		elif variables[k] == 'd':
+			print("Coding %s as discrete variable" % variables[j])
+			temp = dummy_code(np.array(pdCSV[variables[j]]), iscontinous = False, demean = demean_flag)
+			if temp.ndim == 1:
+				temp = temp[:,np.newaxis]
+			exog.append(temp)
+		else:
+			print("Error: variable type is not understood")
+		names.append(variables[j])
+	return (exog, names)
+
+
+def dummy_code(variable, iscontinous = False, demean = True):
+	"""
+	Dummy codes a variable
+	
+	Parameters
+	----------
+	variable : array
+		1D array variable of any type 
+
+	Returns
+	---------
+	dummy_vars : array
+		dummy coded array of shape [(# subjects), (unique variables - 1)]
+	
+	"""
+	if iscontinous:
+		if demean:
+			dummy_vars = variable - np.mean(variable,0)
+		else:
+			dummy_vars = variable
+	else:
+		unique_vars = np.unique(variable)
+		dummy_vars = []
+		for var in unique_vars:
+			temp_var = np.zeros((len(variable)))
+			temp_var[variable == var] = 1
+			dummy_vars.append(temp_var)
+		dummy_vars = np.array(dummy_vars)[1:] # remove the first column as reference variable
+		dummy_vars = np.squeeze(dummy_vars).astype(np.int).T
+		if demean:
+			dummy_vars = dummy_vars - np.mean(dummy_vars,0)
+	return dummy_vars
+
+
+def stack_ones(arr):
+	"""
+	Add a column of ones to an array
+	
+	Parameters
+	----------
+	arr : array
+
+	Returns
+	---------
+	arr : array
+		array with a column of ones
+	
+	"""
+	return np.column_stack([np.ones(len(arr)),arr])

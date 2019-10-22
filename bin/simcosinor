@@ -11,12 +11,18 @@ from simcosinor.functions import check_columns, load_vars, residual_cosinor, lm_
 DESCRIPTION = "Various simulation of cosinor models."
 
 def getArgumentParser(parser = argparse.ArgumentParser(description = DESCRIPTION)):
-	parser.add_argument("-i", "--csv",
+	inputdata = parser.add_mutually_exclusive_group(required=True)
+	inputdata.add_argument("-e", "--examplecsv",
 		nargs = 1,
-		default = [CosinorExamples.three_subjects_normed],
+		choices = ['threesubs_modality1', 'threesubs_modality2'],
 		type = str,
 		metavar=('*.csv'),
-		help="Input comma-separated values (CSV) file. Default: %(default)s)")
+		help="Choose from one of the example csv files. Choices: %(choices)s)")
+	inputdata.add_argument("-i", "--inputcsv",
+		nargs = 1,
+		type = str,
+		metavar=('*.csv'),
+		help="Input a comma-separated values (CSV) file.")
 	parser.add_argument("-rand", "--randomisetimepoints",
 		action = 'store_true',
 		help="Randomise the sampling time for the prediction model instead of using the actual times.")
@@ -79,15 +85,25 @@ def getArgumentParser(parser = argparse.ArgumentParser(description = DESCRIPTION
 		nargs='+',
 		metavar=('exogn', '{d|c}'),
 		required=False)
+	parser.add_argument("-nosim", "--nosimulation", 
+		action='store_true',
+		help="No simulations are performed.")
 	return parser
 
 def run(opts):
 
-	CSV = opts.csv[0]
+	if opts.examplecsv:
+		if opts.examplecsv[0] == 'threesubs_modality1':
+			CSV = CosinorExamples.modality1_subjects_normed
+		if opts.examplecsv[0] ==  'threesubs_modality2':
+			CSV = CosinorExamples.modality2_subjects_normed
+	if opts.inputcsv:
+		CSV = opts.inputcsv[0]
 	pdCSV = pd.read_csv(CSV, delimiter=',', index_col=None)
 	if opts.outputcolumnnames:
 		check_columns(pdCSV)
 		quit()
+
 
 	roi = opts.roi[0]
 	scan_time = opts.csvtimevariable[0]
@@ -126,20 +142,21 @@ def run(opts):
 		period = opts.period
 		resids = residual_cosinor(endog = data, time_var = time_h, period = period)
 
-		print("Running 10000 simulations...")
-		print("ROI = %s" % roi)
-		if opts.bysubject:
-			print("Subject = %s" % subject)
+		if not opts.nosimulation:
+			print("Running 10000 simulations...")
+			print("ROI = %s" % roi)
+			if opts.bysubject:
+				print("Subject = %s" % subject)
 
-		# eventually port this out to joblib
-		simR2, simF, simAmpl, simAcro24, simPvalues = zip(*[run_cosinor_simulation(endog = data, time_variable = time_h, period = period, resids = resids, randomise_time = opts.randomisetimepoints, resample_eveningly = opts.evenresampling, n_sampling = int(opts.nsamples[0]), range_sampling = opts.samplerange) for i in range(10000)])
+			# eventually port this out to joblib
+			simR2, simF, simAmpl, simAcro24, simPvalues = zip(*[run_cosinor_simulation(endog = data, time_variable = time_h, period = period, resids = resids, randomise_time = opts.randomisetimepoints, resample_eveningly = opts.evenresampling, n_sampling = int(opts.nsamples[0]), range_sampling = opts.samplerange) for i in range(10000)])
 
-		simR2 = np.array(simR2)
-		simAcro24 = np.array(simAcro24)
-		log10p = -np.log(simPvalues)
+			simR2 = np.array(simR2)
+			simAcro24 = np.array(simAcro24)
+			log10p = -np.log(simPvalues)
 
-		print("[Metric]\t[Mean] [Standard Deviation]")
-		print("R2\t=\t%1.4f [%1.4f]\nAcro24\t=\t%1.4f [%1.4f]\n-logP\t=\t%1.4f [%1.4f]" % (simR2.mean(), simR2.std(), simAcro24.mean(), simAcro24.std(), log10p.mean(), log10p.std()))
+			print("[Metric]\t[Mean] [Standard Deviation]")
+			print("R2\t=\t%1.4f [%1.4f]\nAcro24\t=\t%1.4f [%1.4f]\n-logP\t=\t%1.4f [%1.4f]" % (simR2.mean(), simR2.std(), simAcro24.mean(), simAcro24.std(), log10p.mean(), log10p.std()))
 
 		if opts.plotsimulations:
 			plot_cosinor_simulations(endog = data,

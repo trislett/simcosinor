@@ -9,7 +9,8 @@ from matplotlib.ticker import StrMethodFormatter
 
 
 class CosinorExamples:
-	three_subjects_normed = "%s/simcosinor/examples/examples_subjects_norm.csv" % os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+	modality1_subjects_normed = "%s/simcosinor/examples/examples_subjects_norm_modality_1.csv" % os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+	modality2_subjects_normed = "%s/simcosinor/examples/examples_subjects_norm_modality_2.csv" % os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
 
 def run_cosinor_simulation(endog, time_variable, period = [24.0], resids = None, randomise_time = False, resample_eveningly = False, n_sampling = None, range_sampling = None, i = 0):
@@ -394,10 +395,12 @@ def plot_permuted_model(endog, time_variable, period = [24.0], n_perm = 10000, o
 		pp = 1 - p_array[stat_loc]
 		pp_text = r'$\mathrm{p(permuted)} = %1.3e$' % pp
 
+	critF = np.sort(Fperm.squeeze())[::-1][int(0.05*n_perm)]
 	textstr = '\n'.join((
 		txt,
 		r'R^2 = %1.2f' % R2,
 		r'F(%d,%d) = %1.2f' % (DF_Between, DF_Within, Fmodel),
+		r'F(alpha=0.05) = %1.2f' % (critF),
 		r'$\mathrm{p(parametric)}=%1.3e$' % (f.sf(Fmodel, DF_Between, DF_Within)),
 		pp_text))
 
@@ -409,7 +412,6 @@ def plot_permuted_model(endog, time_variable, period = [24.0], n_perm = 10000, o
 	plt.text(0.6, 0.6, textstr,
 					transform=plt.gca().transAxes,
 					bbox=dict(facecolor='b', alpha=0.1))
-	critF = np.sort(Fperm.squeeze())[::-1][int(0.05*n_perm)]
 	plt.axvline(x=critF, color='k', alpha = 0.2)
 	if Fmodel > critF:
 		plt.axvline(x=Fmodel, color='g', alpha = .8, ls = '--')

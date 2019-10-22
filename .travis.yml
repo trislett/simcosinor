@@ -9,4 +9,4 @@ python:
 install:
   - pip install .
 
-script: simcosinor
+script: simcosinor -e threesubs_modality1

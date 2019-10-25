@@ -17,25 +17,25 @@ cd ..
 
 Just run 10000 simulations using the defaults: 
 ```
-simcosinor
+simcosinor -e threesubs_modality1
 ```
 
 Run the simulations using 24 random times points only.
 
 ```
-simcosinor -rand -ns 24
+simcosinor -e threesubs_modality1 -rand -ns 24
 ```
 
 Run the simulations with eveningly dispursed time-points, but limited from 11:30am until 11:30pm.
 
 ```
-simcosinor -rand -ns 72 -sr 11.5 23.5 -er
+simcosinor -e threesubs_modality1 -rand -ns 72 -sr 11.5 23.5 -er
 ```
 
 Run the simulations with randomly dispursed time-points.
 
 ```
-simcosinor -rand -ns 72 -sr 0 24
+simcosinor -e threesubs_modality1 -rand -ns 72 -sr 0 24
 ```
 
 ### Plotting examples
@@ -43,17 +43,18 @@ simcosinor -rand -ns 72 -sr 0 24
 Run simulation and generate plots of the right insula gyrus
 
 ```
-simcosinor -rand -ps -pp -pw 24 -ppm -roi rh.R_Ig
+simcosinor -e threesubs_modality1 -rand -ps -pp -pw 24 -ppm -roi rh.R_Ig
 ```
 
 Console output:
 
 ```
 Running 10000 simulations...
-[Metric]	[Mean] [Standard Deviation]
-R2	=	0.3061 [0.0841]
-Acro24	=	16.7937 [0.7331]
--logP	=	12.8657 [4.2723]
+ROI = rh.R_Ig
+[Metric]		[Mean] [Standard Deviation]
+R2		=	0.3062 [0.0832]
+Acro24[24.0]	=	16.8039 [0.7275]
+-logP		=	12.8674 [4.2322]
 ```
 
 Simulation plot:

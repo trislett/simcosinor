@@ -6,12 +6,14 @@ from simcosinor.cynumstats import cy_lin_lstsqr_mat_residual, cy_lin_lstsqr_mat,
 from scipy.stats import t, f, norm
 from matplotlib import pyplot as plt
 from matplotlib.ticker import StrMethodFormatter
+import matplotlib.patches as mpatches
 
 
 class CosinorExamples:
 	modality1_subjects_normed = "%s/simcosinor/examples/examples_subjects_norm_modality_1.csv" % os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 	modality2_subjects_normed = "%s/simcosinor/examples/examples_subjects_norm_modality_2.csv" % os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-
+	modality3_subjects_normed = "%s/simcosinor/examples/examples_subjects_norm_modality_3.csv" % os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+	modality4_subjects_normed = "%s/simcosinor/examples/examples_subjects_norm_modality_4.csv" % os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
 def run_cosinor_simulation(endog, time_variable, period = [24.0], resids = None, randomise_time = False, resample_eveningly = False, n_sampling = None, range_sampling = None, i = 0):
 
@@ -354,7 +356,7 @@ def plot_permuted_model(endog, time_variable, period = [24.0], n_perm = 10000, o
 	plt.title("Plot of the Cosinor Model")
 	plt.plot(times, model_line, c='k')
 	plt.scatter(time_variable, endog, marker = '.')
-	plt.fill_between(times, model_line - np.squeeze(SE_AMPLITUDE), model_line + np.squeeze(SE_AMPLITUDE), alpha=0.2, color='k')
+	plt.fill_between(times, model_line - np.mean(np.squeeze(SE_AMPLITUDE)), model_line + np.mean(np.squeeze(SE_AMPLITUDE)), alpha=0.2, color='k')
 	# Mesor
 	plt.axhline(y=MESOR[0], color='k', alpha = 0.2)
 	plt.axhline(y=(MESOR[0] - np.squeeze(SE_MESOR)), color='k', ls=':', alpha = 0.2)
@@ -373,15 +375,30 @@ def plot_permuted_model(endog, time_variable, period = [24.0], n_perm = 10000, o
 
 	a = np.squeeze(ACROPHASE_24)
 	a_se = np.squeeze(ACROPHASE_SE_24)
-	plt.axvline(x=a.squeeze(), color='k', alpha = 0.2)
-	plt.axvline(x=(a - a_se), color='k', ls=':', alpha = 0.2)
-	plt.axvline(x=(a + a_se), color='k', ls=':', alpha = 0.2)
+	if len(period) > 1:
+		color_arr = ['r', 'g', 'b', 'y', 'c', 'k']
+		legend_patch = []
+		for i, a_ in enumerate(a):
+			legend_patch.append(mpatches.Patch(color=color_arr[i], hatch = '|', label='Period [%1.1f]' % period[i]))
+			plt.axvline(x=a_.squeeze(), color=color_arr[i], alpha = 0.2)
+			plt.axvline(x=(a_ - a_se[i]), color=color_arr[i], ls=':', alpha = 0.2)
+			plt.axvline(x=(a_ + a_se[i]), color=color_arr[i], ls=':', alpha = 0.2)
+		plt.legend(handles=legend_patch)
+	else:
+		plt.axvline(x=a.squeeze(), color='k', alpha = 0.2)
+		plt.axvline(x=(a - a_se), color='k', ls=':', alpha = 0.2)
+		plt.axvline(x=(a + a_se), color='k', ls=':', alpha = 0.2)
 	plt.xticks(list(range(25)))
 
 	plt.subplot(2, 1, 2)
 	plt.title("Histogram of F(model) values from %d permutations" % (n_perm))
-	plt.hist(Fperm, bins=50)
+	n_, bins_, patches_ =  plt.hist(Fperm, bins=50)
 	txt = r"$y(t) = %1.2f $" % (MESOR)
+
+	# F distribution null pdf line
+	x = np.linspace(f.ppf(0.001, DF_Between, DF_Within),f.ppf(0.999, DF_Between, DF_Within), 1000)
+	plt.plot(x, f.pdf(x, DF_Between, DF_Within) * sum(n_ * np.diff(bins_)), ls = ':', c = 'k', alpha = 0.5)
+
 	for i, per in enumerate(period):
 		txt += r"$+ %1.3f\mathrm{cos} (2 \pi (t)/%d %1.3f)$" % (AMPLITUDE[i], per, ACROPHASE[i])
 
@@ -404,12 +421,11 @@ def plot_permuted_model(endog, time_variable, period = [24.0], n_perm = 10000, o
 		r'$\mathrm{p(parametric)}=%1.3e$' % (f.sf(Fmodel, DF_Between, DF_Within)),
 		pp_text))
 
-	
 	left, width = .25, .5
 	bottom, height = .25, .5
 	right = left + width
 	top = bottom + height
-	plt.text(0.6, 0.6, textstr,
+	plt.text(0.6 - ((len(period)-1)*0.12), 0.6, textstr,
 					transform=plt.gca().transAxes,
 					bbox=dict(facecolor='b', alpha=0.1))
 	plt.axvline(x=critF, color='k', alpha = 0.2)
@@ -549,7 +565,12 @@ def sliding_window_cosinor(endog, time_variable, subset_size = 24, period = [24.
 
 		plt.subplot(5, 1, 3)
 		plt.plot(steps, step_ampl)
-		plt.fill_between(steps, step_ampl - step_ampl_SE, step_ampl + step_ampl_SE, alpha=0.2, color='k')
+		if len(period) == 1:
+			plt.fill_between(steps, 
+								step_ampl - step_ampl_SE,
+								step_ampl + step_ampl_SE,
+								alpha=0.2,
+								color='k')
 		plt.ylabel('Amplitude')
 		plt.gca().yaxis.set_major_formatter(StrMethodFormatter('{x:,.2f}'))
 		plt.xticks(steps)

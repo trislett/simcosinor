@@ -14,7 +14,7 @@ def getArgumentParser(parser = argparse.ArgumentParser(description = DESCRIPTION
 	inputdata = parser.add_mutually_exclusive_group(required=True)
 	inputdata.add_argument("-e", "--examplecsv",
 		nargs = 1,
-		choices = ['threesubs_modality1', 'threesubs_modality2'],
+		choices = ['threesubs_modality1', 'threesubs_modality2',  'threesubs_modality3',  'threesubs_modality4'],
 		type = str,
 		metavar=('*.csv'),
 		help="Choose from one of the example csv files. Choices: %(choices)s)")
@@ -52,7 +52,7 @@ def getArgumentParser(parser = argparse.ArgumentParser(description = DESCRIPTION
 		help="Outputs the input CSV column names. Useful for getting the name of different regions of interest.", 
 		action='store_true')
 	parser.add_argument("-p", "--period", 
-		nargs = 1,
+		nargs = '+',
 		default = [24.0],
 		metavar=('float'),
 		type = float,
@@ -90,6 +90,15 @@ def getArgumentParser(parser = argparse.ArgumentParser(description = DESCRIPTION
 		help="No simulations are performed.")
 	return parser
 
+# debugging
+#class opts: 
+#	bysubject = ['Subject']
+#	randomisetimepoints = True
+#	evenresampling = True
+#	nsamples = [72]
+#	samplerange = [0,23.99]
+#	plotslidingwindow = [8]
+
 def run(opts):
 
 	if opts.examplecsv:
@@ -97,6 +106,10 @@ def run(opts):
 			CSV = CosinorExamples.modality1_subjects_normed
 		if opts.examplecsv[0] ==  'threesubs_modality2':
 			CSV = CosinorExamples.modality2_subjects_normed
+		if opts.examplecsv[0] ==  'threesubs_modality3':
+			CSV = CosinorExamples.modality3_subjects_normed
+		if opts.examplecsv[0] ==  'threesubs_modality4':
+			CSV = CosinorExamples.modality4_subjects_normed
 	if opts.inputcsv:
 		CSV = opts.inputcsv[0]
 	pdCSV = pd.read_csv(CSV, delimiter=',', index_col=None)
@@ -111,7 +124,7 @@ def run(opts):
 	if opts.bysubject:
 		subject_arr = pdCSV[opts.bysubject[0]]
 	else:
-		subject_arr = np.full(len(scan_time), 'all')
+		subject_arr = np.full(len(pdCSV[scan_time]), 'all')
 
 	for subject in np.unique(subject_arr):
 		# plot names
@@ -155,8 +168,15 @@ def run(opts):
 			simAcro24 = np.array(simAcro24)
 			log10p = -np.log(simPvalues)
 
-			print("[Metric]\t[Mean] [Standard Deviation]")
-			print("R2\t=\t%1.4f [%1.4f]\nAcro24\t=\t%1.4f [%1.4f]\n-logP\t=\t%1.4f [%1.4f]" % (simR2.mean(), simR2.std(), simAcro24.mean(), simAcro24.std(), log10p.mean(), log10p.std()))
+			print("[Metric]\t\t[Mean] [Standard Deviation]")
+
+			if len(period) > 1:
+				Acrotxt = ""
+				for i, p in enumerate(period):
+					Acrotxt += "Acro24[%1.1f]\t=\t%1.4f [%1.4f]\n" % (p, simAcro24[i].mean(), simAcro24[i].std())
+				print("R2\t\t=\t%1.4f [%1.4f]\n%s-logP\t\t=\t%1.4f [%1.4f]" % (simR2.mean(), simR2.std(), Acrotxt, log10p.mean(), log10p.std()))
+			else:
+				print("R2\t\t=\t%1.4f [%1.4f]\nAcro24[%1.1f]\t=\t%1.4f [%1.4f]\n-logP\t\t=\t%1.4f [%1.4f]" % (simR2.mean(), simR2.std(), period[0], simAcro24.mean(), simAcro24.std(), log10p.mean(), log10p.std()))
 
 		if opts.plotsimulations:
 			plot_cosinor_simulations(endog = data,

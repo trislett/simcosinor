@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import argparse
 
-from simcosinor.functions import check_columns, load_vars, residual_cosinor, lm_residuals, run_cosinor_simulation, plot_cosinor_simulations, plot_permuted_model, periodogram, sliding_window_cosinor, CosinorExamples
+from simcosinor.functions import check_columns, load_vars, residual_cosinor, lm_residuals, run_cosinor_simulation, create_simulated_data, plot_cosinor_simulations, plot_permuted_model, periodogram, sliding_window_cosinor, CosinorExamples
 
 DESCRIPTION = "Various simulation of cosinor models."
 
@@ -23,6 +23,11 @@ def getArgumentParser(parser = argparse.ArgumentParser(description = DESCRIPTION
 		type = str,
 		metavar=('*.csv'),
 		help="Input a comma-separated values (CSV) file.")
+	inputdata.add_argument("-scm", "--setcosinormodel",
+		nargs = 5,
+		type = str,
+		metavar=('float', 'float', 'int', 'float', 'float'),
+		help="-smp {amplitude} {acrophase24} {n_timepoints} {noise_mean} {noise_std}")
 	parser.add_argument("-rand", "--randomisetimepoints",
 		action = 'store_true',
 		help="Randomise the sampling time for the prediction model instead of using the actual times.")
@@ -112,14 +117,47 @@ def run(opts):
 			CSV = CosinorExamples.modality4_subjects_normed
 	if opts.inputcsv:
 		CSV = opts.inputcsv[0]
+	if opts.setcosinormodel:
+		if len(opts.period) == 1:
+			pdCSV = create_simulated_data(modeloptions = opts.setcosinormodel,
+													period = opts.period,
+													range_sampling = opts.samplerange,
+													resample_eveningly = opts.evenresampling,
+													save_csv = 'simulated_data.csv',
+													summate_models = None)
+		else:
+			print("Random acrophases are generated for multiple periods.")
+			for per in opts.period:
+				period = [per]
+				if per == opts.period[0]:
+					pdCSV = create_simulated_data(modeloptions = opts.setcosinormodel,
+															period = period,
+															range_sampling = opts.samplerange,
+															resample_eveningly = opts.evenresampling,
+															save_csv = None,
+															random_acrophase = True,
+															summate_models = None)
+				else:
+					pdCSV = create_simulated_data(modeloptions = opts.setcosinormodel,
+															period = period,
+															range_sampling = opts.samplerange,
+															resample_eveningly = opts.evenresampling,
+															save_csv = 'simulated_data.csv',
+															random_acrophase = True,
+															summate_models = pdCSV)
+		CSV = 'simulated_data.csv'
+
 	pdCSV = pd.read_csv(CSV, delimiter=',', index_col=None)
 	if opts.outputcolumnnames:
 		check_columns(pdCSV)
 		quit()
 
-
-	roi = opts.roi[0]
-	scan_time = opts.csvtimevariable[0]
+	if opts.setcosinormodel:
+		roi = 'simulated_roi'
+		scan_time = 'scan_time'
+	else:
+		roi = opts.roi[0]
+		scan_time = opts.csvtimevariable[0]
 
 	if opts.bysubject:
 		subject_arr = pdCSV[opts.bysubject[0]]

@@ -2,6 +2,7 @@
 
 import os
 import numpy as np
+import pandas as pd
 from simcosinor.cynumstats import cy_lin_lstsqr_mat_residual, cy_lin_lstsqr_mat, se_of_slope
 from scipy.stats import t, f, norm
 from matplotlib import pyplot as plt
@@ -767,3 +768,71 @@ def stack_ones(arr):
 	
 	"""
 	return np.column_stack([np.ones(len(arr)),arr])
+
+
+def create_simulated_data(modeloptions, period = [24.0], range_sampling = [0, 23.99], resample_eveningly = False, save_csv = None, random_acrophase = False, summate_models = None):
+	"""
+	Create simulated data. 
+	
+	Parameters
+	----------
+	modeloptions : array
+		Argparse options
+	period : array
+		period(s) of simulated data
+	range_sampling: array
+		The time range for simulating [start, stop]
+	resample_eveningly : bool
+		The time points will be equally distributed across the sample range.
+	save_csv : str
+		Save name of CSV file
+	random_acrophase : bool
+		Randomise the acrophase
+	summate_models : bool
+		Add a previous model to the current one.
+	Returns
+	---------
+	pdCSV : dictionary
+		Pandas CSV
+	"""
+
+	assert len(period) == 1, "[Error]: only one period can be simulated at a time (run_cosinor_simulation)."
+
+	AMPLITUDE = np.array([float(modeloptions[0])]).reshape(1,1)
+	if random_acrophase:
+		acrophase24 = np.random.rand()*period[0]
+		print("Random acrophase for period [%1.1f] is : %1.1f" % (period[0], acrophase24))
+	else:
+		acrophase24 = float(modeloptions[1])
+	n_timepoints = int(modeloptions[2])
+	noise_mean = float(modeloptions[3])
+	noise_std = float(modeloptions[4])
+
+	if resample_eveningly:
+		time_variable = np.linspace(range_sampling[0],range_sampling[1],n_timepoints)
+	else:
+		time_variable = np.sort(np.random.uniform(low=range_sampling[0], high=range_sampling[1], size=(n_timepoints,)))
+
+	ACROPHASE = np.array([-np.divide((2 * np.pi * acrophase24), period[0])]).reshape(1,1)
+	noise = np.random.normal(noise_mean, noise_std, n_timepoints).reshape(n_timepoints,1)
+
+
+	predicted = project_cosionor_model(MESOR = [noise_mean],
+												AMPLITUDE = AMPLITUDE,
+												ACROPHASE = ACROPHASE,
+												TIME_VAR = time_variable,
+												PERIOD = period)
+
+	sim_endog = noise + predicted
+
+	pd_out = pd.DataFrame(index = None)
+	pd_out['Subject'] = np.full(n_timepoints, 'SUB1')
+	pd_out['scan_time'] = time_variable
+	pd_out['simulated_roi'] = sim_endog
+	if summate_models is not None:
+		pd_out['simulated_roi'] = pd_out['simulated_roi'] + summate_models['simulated_roi']
+	if save_csv is not None:
+		pd_out.to_csv(save_csv, sep=',', encoding='utf-8', index = False, index_label=None)
+	return(pd_out)
+
+

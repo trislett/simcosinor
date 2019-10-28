@@ -211,7 +211,7 @@ def run(opts):
 			if len(period) > 1:
 				Acrotxt = ""
 				for i, p in enumerate(period):
-					Acrotxt += "Acro24[%1.1f]\t=\t%1.4f [%1.4f]\n" % (p, simAcro24[i].mean(), simAcro24[i].std())
+					Acrotxt += "Acro24[%1.1f]\t=\t%1.4f [%1.4f]\n" % (p, simAcro24[:,i].mean(), simAcro24[:,i].std())
 				print("R2\t\t=\t%1.4f [%1.4f]\n%s-logP\t\t=\t%1.4f [%1.4f]" % (simR2.mean(), simR2.std(), Acrotxt, log10p.mean(), log10p.std()))
 			else:
 				print("R2\t\t=\t%1.4f [%1.4f]\nAcro24[%1.1f]\t=\t%1.4f [%1.4f]\n-logP\t\t=\t%1.4f [%1.4f]" % (simR2.mean(), simR2.std(), period[0], simAcro24.mean(), simAcro24.std(), log10p.mean(), log10p.std()))

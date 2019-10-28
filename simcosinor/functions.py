@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from __future__ import division
 import os
 import numpy as np
 import pandas as pd
@@ -112,7 +113,7 @@ def run_cosinor_simulation(endog, time_variable, period = [24.0], resids = None,
 	return(sim_R2.squeeze(), sim_Fmodel.squeeze(), sim_tAMPLITUDE.squeeze(), ACROPHASE_24.squeeze(), p_values.squeeze())
 
 
-def regression_f_ratio(endog, exog_m1, exog_m2, covars = None):
+def regression_f_ratio(endog, exog_m1, exog_m2, calc_p = False, covars = None):
 	"""
 	Compares regression models
 	
@@ -133,6 +134,8 @@ def regression_f_ratio(endog, exog_m1, exog_m2, covars = None):
 	---------
 	F_ratio : array
 		F distribution with dof (dfN, dfF)
+	p_values : array
+		P-values with dof (dfN, dfF)
 	"""
 
 	n = endog.shape[0]
@@ -153,8 +156,56 @@ def regression_f_ratio(endog, exog_m1, exog_m2, covars = None):
 	dfR = DF_Within_m2
 
 	F_ratio = (((SS_Residuals_m2 - SS_Residuals_m1)/(dfR - dfF))/(SS_Residuals_m1/dfF))
-	p_values = f.sf(F_ratio, dfN, dfF)
+	if calc_p:
+		p_values = f.sf(F_ratio, dfN, dfF)
+	else:
+		p_values = None
 	return(F_ratio, p_values)
+
+def dummy_code_cosine(time_variable, period = [24.0]):
+	exog_vars = np.ones((len(time_variable)))
+	for i in range(len(period)):
+		exog_vars = np.column_stack((exog_vars,np.cos(np.divide(2.0*np.pi*time_variable, period[i]))))
+		exog_vars = np.column_stack((exog_vars,np.sin(np.divide(2.0*np.pi*time_variable, period[i]))))
+	return(np.array(exog_vars))
+
+def permute_F_ratio_cosinor(endog, time_variable, period, iterator, covars = None, blocking = None, randomise = True):
+	n = len(time_variable)
+	# Check that endog has two dimensions
+	if endog.ndim == 1:
+		endog = endog.reshape(len(endog),1)
+
+	if randomise:
+		rand_array = np.random.permutation(list(range(n)))
+		endog = endog[rand_array]
+
+	period = np.array(period)
+
+	exog_model = dummy_code_cosine(time_variable, period)
+
+	other_models = []
+	for per in period:
+		other_models.append(period[period!=per])
+	other_models = np.array(other_models)
+
+	k = exog_model.shape[1]
+	DF_Between = k - 1 # aka df model
+	DF_Within = n - k # aka df residuals
+
+	SS_Total = np.sum((endog - np.mean(endog,0))**2,0)
+	SS_Residuals = cy_lin_lstsqr_mat_residual(exog_model, endog)[1]
+
+	SS_Between = SS_Total - SS_Residuals
+	MS_Residuals = (SS_Residuals/ DF_Within)
+	Fmodel = (SS_Between/DF_Between) / MS_Residuals
+
+	# Compute F-statistic for each period
+	Fperm = []
+	for op in other_models:
+			SS_model = np.array(SS_Total - cy_lin_lstsqr_mat_residual(dummy_code_cosine(time_variable, op), endog)[1])
+			Ftemp = (SS_Between - SS_model)/(MS_Residuals*2)
+			Fperm.append(Ftemp)
+	return(Fmodel, Fperm)
 
 
 # https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3991883/
@@ -334,12 +385,21 @@ def plot_permuted_model(endog, time_variable, period = [24.0], n_perm = 10000, o
 	if endog.ndim == 1:
 		endog = endog.reshape(len(endog),1)
 	resids = residual_cosinor(endog = endog, time_var = time_variable, period = period)
-	Fperm = np.array([permute_cosinor(endog = resids, time_variable = time_variable, period = period, iterator = i) for i in range(n_perm)])
+	if len(period) == 1:
+		fsubplots = False
+		Fperm = np.array([permute_cosinor(endog = resids, time_variable = time_variable, period = period, iterator = i) for i in range(n_perm)])
+	else:
+		print("Multiple periods detected [%s]" % " ".join(map(str,period)))
+		fsubplots = True
+		Fvalues = np.array(permute_F_ratio_cosinor(endog, time_variable, period, 0, randomise=False)[1])
+		Fperm, Fperiod = zip(*[permute_F_ratio_cosinor(resids, time_variable, period, i, randomise=True) for i in range(n_perm)])
+		Fperm = np.array(Fperm)
+		Fperiod = np.array(Fperiod)
+
 	n = len(time_variable)
 	k = len(period)*2 + 1
 	DF_Between = k - 1 # aka df model
 	DF_Within = n - k # aka df residuals
-
 
 	R2, MESOR, SE_MESOR, AMPLITUDE, SE_AMPLITUDE, ACROPHASE, SE_ACROPHASE, Fmodel = glm_cosinor(endog = endog, 
 								time_var = time_variable,
@@ -436,6 +496,43 @@ def plot_permuted_model(endog, time_variable, period = [24.0], n_perm = 10000, o
 		plt.axvline(x=Fmodel, color='r', alpha = .8, ls = '--')
 	plt.savefig(outname, transparent=False, bbox_inches='tight')
 	plt.close()
+	if fsubplots:
+		outname = "subplots_" + outname
+		plt.figure(figsize=(12,8))
+		n_per = len(period)
+		plt.title("Histogram of F-values for each period from %d permutations" % (n_perm))
+		for i in range(n_per):
+			plt.subplot(n_per, 1, int(i+1))
+			plt.hist(Fperiod[:,i].squeeze(), bins=50)
+			critF = np.sort(Fperiod[:,i].squeeze())[::-1][int(0.05*n_perm)]
+
+			if np.squeeze(Fvalues[i]) > Fperiod[:,i].max():
+				pp_text = r'$\mathrm{p(permuted)} < 0.0001$'
+			else:
+				p_array=np.zeros((n_perm))
+				for j in range(n_perm):
+					p_array[j] = np.true_divide(j,n_perm)
+				stat_loc = np.searchsorted(np.sort(Fperiod[:,i].squeeze()), Fvalues[i], side="right")
+				pp = 1 - p_array[stat_loc]
+				pp_text = r'$\mathrm{p(permuted)} = %1.3e$' % pp
+
+			textstr = '\n'.join((
+				r'Period [%1.1f]' % (period[i]),
+				r'F(%d,%d) = %1.2f' % (2, DF_Within, Fvalues[i]),
+				r'F(alpha=0.05) = %1.2f' % (critF),
+				r'$\mathrm{p(parametric)}=%1.3e$' % (f.sf(Fvalues[i], 2, DF_Within)),
+				pp_text))
+			plt.text(0.5, 0.5, textstr,
+							transform=plt.gca().transAxes,
+							bbox=dict(facecolor='b', alpha=0.1))
+			plt.axvline(x=critF, color='k', alpha = 0.2)
+			if Fvalues[i] > critF:
+				plt.axvline(x=Fvalues[i], color='g', alpha = .8, ls = '--')
+			else:
+				plt.axvline(x=Fvalues[i], color='r', alpha = .8, ls = '--')
+		plt.savefig(outname, transparent=False, bbox_inches='tight')
+		plt.close()
+
 
 def lm_residuals(endog, exog):
 	"""

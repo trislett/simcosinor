@@ -874,7 +874,7 @@ def create_simulated_data(modeloptions, period = [24.0], range_sampling = [0, 23
 	Parameters
 	----------
 	modeloptions : array
-		Argparse options
+		Argparse options {amplitude} {acrophase24} {n_timepoints} {noise_mean} {noise_std}
 	period : array
 		period(s) of simulated data
 	range_sampling: array
@@ -931,5 +931,89 @@ def create_simulated_data(modeloptions, period = [24.0], range_sampling = [0, 23
 	if save_csv is not None:
 		pd_out.to_csv(save_csv, sep=',', encoding='utf-8', index = False, index_label=None)
 	return(pd_out)
+
+def ttest_independent_sample(data1, data2):
+	data1 = np.array(data1)
+	data2 = np.array(data2)
+	return (np.mean(data1) - np.mean(data2))/np.sqrt((np.var(data1, ddof=1)/len(data1)) + (np.var(data2, ddof=1)/len(data1)))
+
+def set_box_color(bp, color):
+	# https://stackoverflow.com/questions/16592222/matplotlib-group-boxplots
+	plt.setp(bp['boxes'], color=color)
+	plt.setp(bp['whiskers'], color=color)
+	plt.setp(bp['caps'], color=color)
+	plt.setp(bp['medians'], color=color)
+
+def compare_two_populations(endog1, endog2, scan_time, period = [24.0]):
+	endog1 = np.array(endog1)
+	endog2 = np.array(endog2)
+	scan_time = np.array(scan_time)
+	print(np.array(endog1).shape, np.array(endog2).shape)
+	assert len(endog1) == len(endog2), "Error: the endogenous variable must be the same length"
+	#sliding window
+	block_size = int(len(endog1) / 10)
+	labels = []
+	data1 = []
+	data2 = []
+	for i in range(10):
+		dof = int(len(endog1[i*block_size:(i+1)*block_size])*2 -2)
+		tval = ttest_independent_sample(endog1[i*block_size:(i+1)*block_size], endog2[i*block_size:(i+1)*block_size])
+		p = (1 - t.cdf(np.abs(tval),df=dof))*2
+		if p < 0.05:
+			sig = '*'
+		if p < 0.001:
+			sig = '**'
+		if p < 0.0001:
+			sig = '***'
+		if p >= 0.05:
+			sig = ''
+		labels.append('%1.1f-%1.1fh\n' % (scan_time[i*block_size], scan_time[(i+1)*block_size-1]) + r'$t_{%d}=%1.1f ^{%s}$' % (dof,tval, sig))
+		data1.append(endog1[i*block_size:(i+1)*block_size])
+		data2.append(endog2[i*block_size:(i+1)*block_size])
+
+
+	M_1, AMP_1, ACR_1 = glm_cosinor(endog = np.array(endog1).reshape(len(endog1),1), 
+											time_var = scan_time,
+											period = period,
+											calc_MESOR = True,
+											output_fit_only = True)
+	y1 = project_cosionor_model(M_1, AMP_1, ACR_1, TIME_VAR = scan_time, PERIOD = period)
+
+	M_2, AMP_2, ACR_2 = glm_cosinor(endog = np.array(endog2).reshape(len(endog2),1), 
+											time_var = scan_time,
+											period = period,
+											calc_MESOR = True,
+											output_fit_only = True)
+
+	y2 = project_cosionor_model(M_2, AMP_2, ACR_2, TIME_VAR = scan_time, PERIOD = period)
+
+	plt.figure(figsize=(12,8))
+	plt.subplot(2, 1, 1)
+	plt.plot(scan_time, y1, c='#D7191C')
+	plt.scatter(scan_time, endog1, marker = '.', c='#D7191C', alpha = 0.2)
+	plt.axhline(y=M_1, color='#D7191C', alpha = 0.2)
+	plt.axvline(x=np.abs(ACR_1/(2*np.pi)) * period[0], color='#D7191C', ls = ':', alpha = 0.2)
+	plt.plot(scan_time, y2, c='#2C7BB6')
+	plt.scatter(scan_time, endog2, marker = '.', c='#2C7BB6', alpha = 0.2)
+	plt.axhline(y=M_2, color='#2C7BB6', alpha = 0.2)
+	plt.axvline(x=np.abs(ACR_2/(2*np.pi)) * period[0], color='#2C7BB6', ls = ':', alpha = 0.2)
+	plt.plot([], c='#D7191C', label='Population1, MESOR = %1.1f, mu = %1.1f, std = %1.1f' % (M_1, endog1.mean(), endog1.std()))
+	plt.plot([], c='#2C7BB6', label='Population2, MESOR = %1.1f, mu = %1.1f, std = %1.1f' % (M_2, endog2.mean(), endog2.std()))
+	plt.xticks(list(range(25)))
+	plt.legend()
+
+	plt.subplot(2, 1, 2)
+	bpl = plt.boxplot(data1, positions=np.array(range(len(data1)))*2.0-0.4, sym='', widths=0.6)
+	bpr = plt.boxplot(data2, positions=np.array(range(len(data2)))*2.0+0.4, sym='', widths=0.6)
+	set_box_color(bpl, '#D7191C') # colors are from http://colorbrewer2.org/
+	set_box_color(bpr, '#2C7BB6')
+	plt.plot([], c='#D7191C', label='Population1')
+	plt.plot([], c='#2C7BB6', label='Population2')
+	plt.legend()
+	plt.xticks(range(0, len(labels) * 2, 2), labels)
+	plt.xlim(-2, len(labels)*2)
+	plt.tight_layout()
+	plt.show()
+
 
 

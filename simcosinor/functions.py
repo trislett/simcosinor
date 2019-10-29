@@ -997,8 +997,8 @@ def compare_two_populations(endog1, endog2, scan_time, period = [24.0]):
 	plt.scatter(scan_time, endog2, marker = '.', c='#2C7BB6', alpha = 0.2)
 	plt.axhline(y=M_2, color='#2C7BB6', alpha = 0.2)
 	plt.axvline(x=np.abs(ACR_2/(2*np.pi)) * period[0], color='#2C7BB6', ls = ':', alpha = 0.2)
-	plt.plot([], c='#D7191C', label='Population1, MESOR = %1.1f, mu = %1.1f, std = %1.1f' % (M_1, endog1.mean(), endog1.std()))
-	plt.plot([], c='#2C7BB6', label='Population2, MESOR = %1.1f, mu = %1.1f, std = %1.1f' % (M_2, endog2.mean(), endog2.std()))
+	plt.plot([], c='#D7191C', label=r'$Population1, \mu \pm SD = %1.1f\pm%1.1f$' % (endog1.mean(), endog1.std()))
+	plt.plot([], c='#2C7BB6', label=r'$Population2, \mu \pm SD = %1.1f\pm%1.1f$' % (endog2.mean(), endog2.std()))
 	plt.xticks(list(range(25)))
 	plt.legend()
 

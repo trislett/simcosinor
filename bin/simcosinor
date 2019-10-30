@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import argparse
 
-from simcosinor.functions import check_columns, load_vars, residual_cosinor, lm_residuals, run_cosinor_simulation, create_simulated_data, plot_cosinor_simulations, plot_permuted_model, periodogram, sliding_window_cosinor, CosinorExamples
+from simcosinor.functions import check_columns, load_vars, residual_cosinor, lm_residuals, run_cosinor_simulation, create_simulated_data, plot_cosinor_simulations, plot_permuted_model, periodogram, sliding_window_cosinor, CosinorExamples, interactive_model_definition, simulated_data_from_json, compare_two_populations
 
 DESCRIPTION = "Various simulation of cosinor models."
 
@@ -28,6 +28,21 @@ def getArgumentParser(parser = argparse.ArgumentParser(description = DESCRIPTION
 		type = str,
 		metavar=('float', 'float', 'int', 'float', 'float'),
 		help="-smp {amplitude} {acrophase24} {n_timepoints} {noise_mean} {noise_std}")
+	inputdata.add_argument("-cmj", "--createmodeljson",
+		nargs = 1,
+		type = str,
+		metavar=('*.json'),
+		help="User prompts to define complex cosinor model for simulations. Saves json of the model. -cmj {model_name}.json")
+	inputdata.add_argument("-rmj", "--readmodeljson",
+		nargs = 1,
+		type = str,
+		metavar=('*.json'),
+		help="Import cosinor model for simulations from the json of the model. -rmj {model_name}.json")
+	inputdata.add_argument("-cs", "--comparesimulations",
+		nargs = 3,
+		type = str,
+		metavar=('*.json', '*.json','*.png'),
+		help="Compare simulated data over a sliding window. -cs {sim1}.json {sim2}.json {outname}.png")
 	parser.add_argument("-rand", "--randomisetimepoints",
 		action = 'store_true',
 		help="Randomise the sampling time for the prediction model instead of using the actual times.")
@@ -146,13 +161,29 @@ def run(opts):
 															random_acrophase = True,
 															summate_models = pdCSV)
 		CSV = 'simulated_data.csv'
+	if opts.createmodeljson:
+		interactive_model_definition(opts.createmodeljson[0])
+		quit()
+	if opts.readmodeljson:
+		pdCSV, _ = simulated_data_from_json(opts.readmodeljson[0])
+	if opts.comparesimulations:
+		pdCSV, period = simulated_data_from_json(opts.comparesimulations[0])
+		pdCSV2, _ = simulated_data_from_json(opts.comparesimulations[1])
+		compare_two_populations(endog1 = pdCSV['simulated_roi'],
+										endog2 = pdCSV2['simulated_roi'],
+										scan_time = pdCSV['scan_time'],
+										period = period,
+										outname = opts.comparesimulations[2])
+		quit()
 
-	pdCSV = pd.read_csv(CSV, delimiter=',', index_col=None)
+	# read the CSV file if not from a JSON
+	if not opts.readmodeljson:
+		pdCSV = pd.read_csv(CSV, delimiter=',', index_col=None)
 	if opts.outputcolumnnames:
 		check_columns(pdCSV)
 		quit()
 
-	if opts.setcosinormodel:
+	if (opts.setcosinormodel) or (opts.readmodeljson):
 		roi = 'simulated_roi'
 		scan_time = 'scan_time'
 	else:

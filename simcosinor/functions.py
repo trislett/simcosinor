@@ -2,6 +2,8 @@
 
 from __future__ import division
 import os
+import sys
+import json
 import numpy as np
 import pandas as pd
 from simcosinor.cynumstats import cy_lin_lstsqr_mat_residual, cy_lin_lstsqr_mat, se_of_slope
@@ -944,7 +946,7 @@ def set_box_color(bp, color):
 	plt.setp(bp['caps'], color=color)
 	plt.setp(bp['medians'], color=color)
 
-def compare_two_populations(endog1, endog2, scan_time, period = [24.0]):
+def compare_two_populations(endog1, endog2, scan_time, period = [24.0], outname = 'compare_two_sim_pops.png'):
 	endog1 = np.array(endog1)
 	endog2 = np.array(endog2)
 	scan_time = np.array(scan_time)
@@ -992,11 +994,13 @@ def compare_two_populations(endog1, endog2, scan_time, period = [24.0]):
 	plt.plot(scan_time, y1, c='#D7191C')
 	plt.scatter(scan_time, endog1, marker = '.', c='#D7191C', alpha = 0.2)
 	plt.axhline(y=M_1, color='#D7191C', alpha = 0.2)
-	plt.axvline(x=np.abs(ACR_1/(2*np.pi)) * period[0], color='#D7191C', ls = ':', alpha = 0.2)
+	for i in range(len(period)):
+		plt.axvline(x=np.abs(ACR_1[i]/(2*np.pi)) * period[i], color='#D7191C', ls = ':', alpha = 0.2)
 	plt.plot(scan_time, y2, c='#2C7BB6')
 	plt.scatter(scan_time, endog2, marker = '.', c='#2C7BB6', alpha = 0.2)
 	plt.axhline(y=M_2, color='#2C7BB6', alpha = 0.2)
-	plt.axvline(x=np.abs(ACR_2/(2*np.pi)) * period[0], color='#2C7BB6', ls = ':', alpha = 0.2)
+	for i in range(len(period)):
+		plt.axvline(x=np.abs(ACR_2[i]/(2*np.pi)) * period[i], color='#2C7BB6', ls = ':', alpha = 0.2)
 	plt.plot([], c='#D7191C', label=r'$Population1, \mu \pm SD = %1.1f\pm%1.1f$' % (endog1.mean(), endog1.std()))
 	plt.plot([], c='#2C7BB6', label=r'$Population2, \mu \pm SD = %1.1f\pm%1.1f$' % (endog2.mean(), endog2.std()))
 	plt.xticks(list(range(25)))
@@ -1013,7 +1017,57 @@ def compare_two_populations(endog1, endog2, scan_time, period = [24.0]):
 	plt.xticks(range(0, len(labels) * 2, 2), labels)
 	plt.xlim(-2, len(labels)*2)
 	plt.tight_layout()
-	plt.show()
+	plt.savefig(outname, transparent=False, bbox_inches='tight')
+	plt.close()
 
 
+def str2array(string, datatype = float):
+	return np.array(string.split(), dtype=datatype)
+
+def interactive_model_definition(jsonname = "cosinor_model_settings.json"):
+	# check python version
+	if sys.version_info[0] < 3:
+		user_input = raw_input
+	else:
+		user_input = input
+	n_timepoints = int(user_input("Enter the number of time-point: "))
+	MESOR = float(user_input("Enter MESOR: "))
+	period = str2array(user_input("Enter period(s): "))
+	AMPLITUDE = []
+	ACROPHASE24 = []
+	Noise_std = []
+	print("For each period, you must enter the amplitude, acrophase(24H), noise mean and standard deviation")
+	for per in period:
+		AMPLITUDE.append(float(user_input("Amplitude [%1.1f]: " % per)))
+		temp = float(user_input("Acrophase [%1.1f]: " % per))
+		assert temp < per, "Error: the acrophase [%1.1f] must be lower than the period [%1.1f]" % (temp, per)
+		ACROPHASE24.append(temp)
+		Noise_std.append(float(user_input("Noise standard deviation [%1.1f]: " % per)))
+	model_settings = {}
+	model_settings['period'] = list(period)
+	model_settings['n_timepoints'] = n_timepoints
+	model_settings['AMPLITUDE'] = AMPLITUDE
+	model_settings['ACROPHASE24'] = ACROPHASE24
+	model_settings['MESOR'] = MESOR
+	model_settings['Noise_std'] = Noise_std
+	with open(jsonname, 'w') as outfile:
+		json.dump(model_settings, outfile, indent=3, sort_keys=True)
+
+# {amplitude} {acrophase24} {n_timepoints} {noise_mean} {noise_std}
+
+def simulated_data_from_json(jsonname):
+	with open(jsonname) as json_file:
+		model_settings = json.load(json_file)
+		period = np.array(model_settings['period'])
+		n_timepoints = int(model_settings['n_timepoints'])
+		AMPLITUDE = np.array(model_settings['AMPLITUDE'])
+		ACROPHASE24 = np.array(model_settings['ACROPHASE24'])
+		MESOR = model_settings['MESOR']
+		Noise_std = np.array(model_settings['Noise_std'])
+	for i, per in enumerate(period):
+		if i == 0:
+			pdMODEL = create_simulated_data(modeloptions = [AMPLITUDE[i], ACROPHASE24[i], n_timepoints, MESOR, Noise_std[i]], period = [per], range_sampling = [0, 23.99], resample_eveningly = True, save_csv = None, random_acrophase = False, summate_models = None)
+		else:
+			pdMODEL = create_simulated_data(modeloptions = [AMPLITUDE[i], ACROPHASE24[i], n_timepoints, 0, Noise_std[i]], period = [per], range_sampling = [0, 23.99], resample_eveningly = True, save_csv = None, random_acrophase = False, summate_models = pdMODEL)
+	return(pdMODEL, period)
 

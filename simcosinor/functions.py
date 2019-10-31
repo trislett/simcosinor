@@ -935,9 +935,26 @@ def create_simulated_data(modeloptions, period = [24.0], range_sampling = [0, 23
 	return(pd_out)
 
 def ttest_independent_sample(data1, data2):
+	"""
+	Simple independent sample T-test
+	
+	Parameters
+	----------
+	data1 : array
+		1-D array
+	data2 : array
+		1-D array
+
+	Returns
+	---------
+	tval : float
+		The t-value
+	
+	"""
 	data1 = np.array(data1)
 	data2 = np.array(data2)
-	return (np.mean(data1) - np.mean(data2))/np.sqrt((np.var(data1, ddof=1)/len(data1)) + (np.var(data2, ddof=1)/len(data1)))
+	tval = (np.mean(data1) - np.mean(data2))/np.sqrt((np.var(data1, ddof=1)/len(data1)) + (np.var(data2, ddof=1)/len(data1)))
+	return tval
 
 def set_box_color(bp, color):
 	# https://stackoverflow.com/questions/16592222/matplotlib-group-boxplots
@@ -947,6 +964,26 @@ def set_box_color(bp, color):
 	plt.setp(bp['medians'], color=color)
 
 def compare_two_populations(endog1, endog2, scan_time, period = [24.0], outname = 'compare_two_sim_pops.png'):
+	"""
+	Build figures comparing to populations based on cosinor simulated data.
+	
+	Parameters
+	----------
+	endog1 : array
+		1-D array
+	endog2 : array
+		1-D array
+	scan_time : array
+		time of sampling
+	period : array
+		Period of the cosinor model
+	outname : string
+		The figure name.
+	Returns
+	---------
+	None
+	
+	"""
 	endog1 = np.array(endog1)
 	endog2 = np.array(endog2)
 	scan_time = np.array(scan_time)
@@ -1022,9 +1059,35 @@ def compare_two_populations(endog1, endog2, scan_time, period = [24.0], outname 
 
 
 def str2array(string, datatype = float):
+	"""
+	Convert a string of numbers to an array
+	
+	Parameters
+	----------
+	string : string
+	datatype : dtype
+
+	Returns
+	---------
+	arr : array
+	
+	"""
 	return np.array(string.split(), dtype=datatype)
 
 def interactive_model_definition(jsonname = "cosinor_model_settings.json"):
+	"""
+	Interactively create cosinor model and save it as a *json file.
+	
+	Parameters
+	----------
+	jsonname : string
+		Output file name
+
+	Returns
+	---------
+	None
+	
+	"""
 	# check python version
 	if sys.version_info[0] < 3:
 		user_input = raw_input
@@ -1056,6 +1119,21 @@ def interactive_model_definition(jsonname = "cosinor_model_settings.json"):
 # {amplitude} {acrophase24} {n_timepoints} {noise_mean} {noise_std}
 
 def simulated_data_from_json(jsonname):
+	"""
+	Imports json file with simulation cosinor model settings.
+	
+	Parameters
+	----------
+	jsonname : string
+		Output file name
+
+	Returns
+	---------
+	pdMODEL : dictionary
+		pandas dictionary of the simulated model
+	Period
+		period of the simulated model.
+	"""
 	with open(jsonname) as json_file:
 		model_settings = json.load(json_file)
 		period = np.array(model_settings['period'])
